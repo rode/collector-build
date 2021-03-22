@@ -17,19 +17,28 @@ package main
 import (
 	"context"
 	"crypto/tls"
+	"fmt"
 	"log"
+	"net"
+	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
+	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
+	"github.com/rode/collector-build/proto/v1alpha1"
+	"github.com/rode/collector-build/server"
 	pb "github.com/rode/rode/proto/v1alpha1"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/reflection"
 
 	"github.com/rode/collector-build/config"
 )
 
-func main()  {
+func main() {
 	conf, err := config.Build(os.Args[0], os.Args[1:])
 	if err != nil {
 		log.Fatalf("error parsing flags: %v", err)
@@ -38,6 +47,11 @@ func main()  {
 	logger, err := createLogger(conf.Debug)
 	if err != nil {
 		log.Fatalf("failed to create logger: %v", err)
+	}
+
+	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", conf.GrpcPort))
+	if err != nil {
+		logger.Fatal("failed to listen", zap.Error(err))
 	}
 
 	dialOptions := []grpc.DialOption{
@@ -53,11 +67,71 @@ func main()  {
 	defer cancel()
 	conn, err := grpc.DialContext(ctx, conf.RodeConfig.Host, dialOptions...)
 	if err != nil {
+		logger.Info(fmt.Sprintf("conf %v", conf.RodeConfig))
 		logger.Fatal("failed to establish grpc connection to Rode", zap.Error(err))
 	}
 	defer conn.Close()
 
-	_ = pb.NewRodeClient(conn)
+	rodeClient := pb.NewRodeClient(conn)
+	grpcServer := grpc.NewServer()
+
+	if conf.Debug {
+		reflection.Register(grpcServer)
+	}
+
+	buildCollectorServer := server.NewBuildCollectorServer(logger, rodeClient)
+	v1alpha1.RegisterBuildCollectorServer(grpcServer, buildCollectorServer)
+
+	go func() {
+		if err := grpcServer.Serve(lis); err != nil {
+			logger.Fatal("failed to serve", zap.Error(err))
+		}
+	}()
+
+	httpServer, err := createGrpcGateway(context.Background(), lis.Addr().String(), fmt.Sprintf(":%d", conf.HttpPort))
+	if err != nil {
+		logger.Fatal("failed to start gateway", zap.Error(err))
+	}
+
+	go func() {
+		if err := httpServer.ListenAndServe(); err != nil {
+			logger.Fatal("failed to start serve on http port", zap.Error(err))
+		}
+	}()
+
+	logger.Info("listening", zap.String("host", lis.Addr().String()))
+
+
+	sig := make(chan os.Signal, 1)
+	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
+
+	terminationSignal := <-sig
+
+	logger.Info("shutting down...", zap.String("termination signal", terminationSignal.String()))
+
+	grpcServer.GracefulStop()
+	httpServer.Shutdown(context.Background())
+}
+
+func createGrpcGateway(ctx context.Context, grpcAddress, httpPort string) (*http.Server, error) {
+	conn, err := grpc.DialContext(
+		context.Background(),
+		grpcAddress,
+		grpc.WithBlock(),
+		grpc.WithInsecure(),
+	)
+	if err != nil {
+		log.Fatalln("Failed to dial server:", err)
+	}
+	gwmux := runtime.NewServeMux()
+	if err := v1alpha1.RegisterBuildCollectorHandler(ctx, gwmux, conn); err != nil {
+		return nil, err
+	}
+
+	return &http.Server{
+		Addr:    httpPort,
+		Handler: gwmux,
+	}, nil
 }
 
 func createLogger(debug bool) (*zap.Logger, error) {

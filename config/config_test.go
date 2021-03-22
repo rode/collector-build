@@ -32,8 +32,9 @@ func TestConfig(t *testing.T) {
 			name:  "defaults",
 			flags: []string{},
 			expected: &Config{
-				Port:  8080,
-				Debug: false,
+				GrpcPort: 8080,
+				HttpPort: 8081,
+				Debug:    false,
 				RodeConfig: &RodeConfig{
 					Host: "rode:50051",
 				},
@@ -53,8 +54,9 @@ func TestConfig(t *testing.T) {
 			name:  "Rode host",
 			flags: []string{"--rode-host=bar"},
 			expected: &Config{
-				Port:  8080,
-				Debug: false,
+				GrpcPort: 8080,
+				HttpPort: 8081,
+				Debug:    false,
 				RodeConfig: &RodeConfig{
 					Host: "bar",
 				},
@@ -64,8 +66,9 @@ func TestConfig(t *testing.T) {
 			name:  "Rode insecure",
 			flags: []string{"--rode-insecure=true"},
 			expected: &Config{
-				Port:  8080,
-				Debug: false,
+				GrpcPort: 8080,
+				HttpPort: 8081,
+				Debug:    false,
 				RodeConfig: &RodeConfig{
 					Host:     "rode:50051",
 					Insecure: true,
