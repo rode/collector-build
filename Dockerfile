@@ -4,6 +4,8 @@ FROM golang:1.15-alpine as builder
 
 WORKDIR /workspace
 
+RUN apk add --no-cache git
+
 # Copy the Go Modules manifests
 COPY go.mod go.sum /workspace/
 
@@ -14,6 +16,8 @@ RUN go mod download
 # Copy the go source
 COPY main.go main.go
 COPY config config
+COPY server server
+COPY proto proto
 
 # Build
 RUN --mount=type=cache,target=/root/.cache/go-build CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o collector-build
