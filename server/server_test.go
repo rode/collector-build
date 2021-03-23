@@ -74,7 +74,7 @@ var _ = Describe("Server", func() {
 			response, actualError = server.CreateBuild(ctx, request)
 		})
 
-		Describe("successful", func() {
+		Describe("successful build occurrence creation", func() {
 			var (
 				expectedOccurrenceId string
 				expectedProvenanceId string
@@ -141,127 +141,124 @@ var _ = Describe("Server", func() {
 			})
 		})
 
-		Describe("sad", func() {
-
-			Context("request validation", func() {
-				When("the request is missing the repository", func() {
-					BeforeEach(func() {
-						request.Repository = ""
-					})
-
-					It("should return an error", func() {
-						Expect(response).To(BeNil())
-						Expect(actualError).To(HaveOccurred())
-					})
-
-					It("should set the status to invalid argument", func() {
-						s := getGRPCStatusFromError(actualError)
-
-						Expect(s.Code()).To(Equal(codes.InvalidArgument))
-						Expect(s.Message()).To(Equal("Invalid request: no repository specified"))
-					})
-				})
-
-				When("the request contains an invalid repository url", func() {
-					BeforeEach(func() {
-						request.Repository = fake.Word()
-					})
-
-					It("should return an error", func() {
-						Expect(response).To(BeNil())
-						Expect(actualError).To(HaveOccurred())
-					})
-
-					It("should set the status to invalid argument", func() {
-						s := getGRPCStatusFromError(actualError)
-
-						Expect(s.Code()).To(Equal(codes.InvalidArgument))
-						Expect(s.Message()).To(ContainSubstring("Invalid Repository URL"))
-					})
-				})
-
-				When("the request contains no artifacts", func() {
-					BeforeEach(func() {
-						request.Artifacts = []string{}
-					})
-
-					It("should return an error", func() {
-						Expect(response).To(BeNil())
-						Expect(actualError).To(HaveOccurred())
-					})
-
-					It("should set the status to invalid argument", func() {
-						s := getGRPCStatusFromError(actualError)
-
-						Expect(s.Code()).To(Equal(codes.InvalidArgument))
-						Expect(s.Message()).To(Equal("Invalid request: no artifacts specified"))
-					})
-				})
-
-				When("the request commit id is empty", func() {
-					BeforeEach(func() {
-						request.CommitId = ""
-					})
-
-					It("should return an error", func() {
-						Expect(response).To(BeNil())
-						Expect(actualError).To(HaveOccurred())
-					})
-
-					It("should set the status to invalid argument", func() {
-						s := getGRPCStatusFromError(actualError)
-
-						Expect(s.Code()).To(Equal(codes.InvalidArgument))
-						Expect(s.Message()).To(Equal("Invalid request: no commit ID specified"))
-					})
-				})
-			})
-
-			Describe("error occurs while creating occurrence", func() {
-				var (
-					expectedError error
-				)
-
+		Describe("request validation", func() {
+			When("the request is missing the repository", func() {
 				BeforeEach(func() {
-					expectedError = fmt.Errorf(fake.Word())
-					rodeClient.EXPECT().
-						BatchCreateOccurrences(gomock.Any(), gomock.Any()).
-						Return(nil, expectedError).
-						Times(1)
+					request.Repository = ""
 				})
 
 				It("should return an error", func() {
-					Expect(actualError).To(HaveOccurred())
 					Expect(response).To(BeNil())
+					Expect(actualError).To(HaveOccurred())
 				})
 
-				It("should set the status to internal server error", func() {
+				It("should set the status to invalid argument", func() {
 					s := getGRPCStatusFromError(actualError)
 
-					Expect(s.Code()).To(Equal(codes.Internal))
-					Expect(s.Message()).To(Equal(fmt.Sprintf("Error creating occurrences in Rode: %s", expectedError)))
+					Expect(s.Code()).To(Equal(codes.InvalidArgument))
+					Expect(s.Message()).To(Equal("Invalid request: no repository specified"))
 				})
 			})
 
-			Describe("BatchCreateOccurrences does not return expected occurrence", func() {
+			When("the request contains an invalid repository url", func() {
 				BeforeEach(func() {
-					rodeClient.EXPECT().
-						BatchCreateOccurrences(gomock.Any(), gomock.Any()).
-						Return(&pb.BatchCreateOccurrencesResponse{}, nil).
-						Times(1)
+					request.Repository = fake.Word()
 				})
 
 				It("should return an error", func() {
-					Expect(actualError).To(HaveOccurred())
 					Expect(response).To(BeNil())
+					Expect(actualError).To(HaveOccurred())
 				})
 
-				It("should set the status to internal server error", func() {
+				It("should set the status to invalid argument", func() {
 					s := getGRPCStatusFromError(actualError)
 
-					Expect(s.Code()).To(Equal(codes.Internal))
-					Expect(s.Message()).To(Equal(fmt.Sprintf("Occurrence data not returned from Rode")))
+					Expect(s.Code()).To(Equal(codes.InvalidArgument))
+					Expect(s.Message()).To(ContainSubstring("Invalid Repository URL"))
 				})
+			})
+
+			When("the request contains no artifacts", func() {
+				BeforeEach(func() {
+					request.Artifacts = []string{}
+				})
+
+				It("should return an error", func() {
+					Expect(response).To(BeNil())
+					Expect(actualError).To(HaveOccurred())
+				})
+
+				It("should set the status to invalid argument", func() {
+					s := getGRPCStatusFromError(actualError)
+
+					Expect(s.Code()).To(Equal(codes.InvalidArgument))
+					Expect(s.Message()).To(Equal("Invalid request: no artifacts specified"))
+				})
+			})
+
+			When("the request commit id is empty", func() {
+				BeforeEach(func() {
+					request.CommitId = ""
+				})
+
+				It("should return an error", func() {
+					Expect(response).To(BeNil())
+					Expect(actualError).To(HaveOccurred())
+				})
+
+				It("should set the status to invalid argument", func() {
+					s := getGRPCStatusFromError(actualError)
+
+					Expect(s.Code()).To(Equal(codes.InvalidArgument))
+					Expect(s.Message()).To(Equal("Invalid request: no commit ID specified"))
+				})
+			})
+		})
+
+		Describe("error occurs while creating occurrence", func() {
+			var (
+				expectedError error
+			)
+
+			BeforeEach(func() {
+				expectedError = fmt.Errorf(fake.Word())
+				rodeClient.EXPECT().
+					BatchCreateOccurrences(gomock.Any(), gomock.Any()).
+					Return(nil, expectedError).
+					Times(1)
+			})
+
+			It("should return an error", func() {
+				Expect(actualError).To(HaveOccurred())
+				Expect(response).To(BeNil())
+			})
+
+			It("should set the status to internal server error", func() {
+				s := getGRPCStatusFromError(actualError)
+
+				Expect(s.Code()).To(Equal(codes.Internal))
+				Expect(s.Message()).To(Equal(fmt.Sprintf("Error creating occurrences in Rode: %s", expectedError)))
+			})
+		})
+
+		Describe("BatchCreateOccurrences does not return expected occurrence", func() {
+			BeforeEach(func() {
+				rodeClient.EXPECT().
+					BatchCreateOccurrences(gomock.Any(), gomock.Any()).
+					Return(&pb.BatchCreateOccurrencesResponse{}, nil).
+					Times(1)
+			})
+
+			It("should return an error", func() {
+				Expect(actualError).To(HaveOccurred())
+				Expect(response).To(BeNil())
+			})
+
+			It("should set the status to internal server error", func() {
+				s := getGRPCStatusFromError(actualError)
+
+				Expect(s.Code()).To(Equal(codes.Internal))
+				Expect(s.Message()).To(Equal(fmt.Sprintf("Occurrence data not returned from Rode")))
 			})
 		})
 	})
