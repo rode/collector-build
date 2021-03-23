@@ -36,5 +36,7 @@ message CreateBuildRequest {
   repeated string artifacts = 2;
 }
 
-// TODO: return new build occurrence
-message CreateBuildResponse {}
+message CreateBuildResponse {
+  // Unique id of the new build occurrence
+  string buildOccurrenceId = 1;
+}

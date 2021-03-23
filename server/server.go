@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/rode/collector-build/proto/v1alpha1"
 	pb "github.com/rode/rode/proto/v1alpha1"
@@ -22,7 +21,5 @@ func NewBuildCollectorServer(logger *zap.Logger, rode pb.RodeClient) *BuildColle
 }
 
 func (s *BuildCollectorServer) CreateBuild(ctx context.Context, request *v1alpha1.CreateBuildRequest) (*v1alpha1.CreateBuildResponse, error) {
-	fmt.Println("hello, world")
-
 	return &v1alpha1.CreateBuildResponse{}, nil
 }
