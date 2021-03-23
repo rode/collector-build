@@ -19,6 +19,8 @@ dockers:
       - "go.sum"
       - "main.go"
       - "config"
+      - "server"
+      - "proto"
 checksum:
   name_template: 'checksums.txt'
 snapshot:
