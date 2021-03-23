@@ -1,4 +1,4 @@
-.PHONY: test fmtcheck vet fmt licensecheck license
+.PHONY: test fmtcheck vet fmt coverage license
 MAKEFLAGS += --silent
 GOFMT_FILES?=$$(find . -name '*.go' | grep -v proto)
 LICENSE_FILES=$$(find -E . -regex '.*\.(go|proto)')
@@ -15,14 +15,14 @@ fmtcheck:
 fmt:
 	gofmt -w -s $(GOFMT_FILES)
 
-licensecheck:
-	missingLicenses=$(shell addlicense -check $(LICENSE_FILES) | wc -l | tr -d ' ') && exit $$missingLicenses
-
 license:
 	addlicense -c 'The Rode Authors' $(LICENSE_FILES)
 
 vet:
 	go vet ./...
 
-test: fmtcheck vet licensecheck
+coverage: test
+	go tool cover -html=coverage.txt
+
+test: fmtcheck vet
 	go test -v ./... -coverprofile=coverage.txt -covermode atomic
