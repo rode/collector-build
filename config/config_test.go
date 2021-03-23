@@ -15,62 +15,48 @@
 package config
 
 import (
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/extensions/table"
+
 	. "github.com/onsi/gomega"
-	"testing"
 )
 
-func TestConfig(t *testing.T) {
-	Expect := NewGomegaWithT(t).Expect
+var _ = Describe("Config", func() {
+	Describe("Build", func() {
+		DescribeTable("invalid configuration", func(flags []string) {
+			c, err := Build("collector-build", flags)
 
-	for _, tc := range []struct {
-		name        string
-		flags       []string
-		expected    *Config
-		expectError bool
-	}{
-		{
-			name:  "defaults",
-			flags: []string{},
-			expected: &Config{
+			Expect(err).To(HaveOccurred())
+			Expect(c).To(BeNil())
+		},
+			Entry("bad grpc port", []string{"--grpc-port=foo"}),
+			Entry("bad http port", []string{"--http-port=bar"}),
+			Entry("bad debug", []string{"--debug=baz"}),
+		)
+
+		DescribeTable("successful configuration", func(flags []string, expected interface{}) {
+			c, err := Build("collector-build", flags)
+
+			Expect(err).To(BeNil())
+			Expect(c).To(Equal(expected))
+		},
+			Entry("default config", []string{}, &Config{
 				GrpcPort: 8082,
 				HttpPort: 8083,
 				Debug:    false,
 				RodeConfig: &RodeConfig{
 					Host: "rode:50051",
 				},
-			},
-		},
-		{
-			name:        "bad grpc port",
-			flags:       []string{"--grpc-port=foo"},
-			expectError: true,
-		},
-		{
-			name:        "bad http port",
-			flags:       []string{"--http-port=bar"},
-			expectError: true,
-		},
-		{
-			name:        "bad debug",
-			flags:       []string{"--debug=baz"},
-			expectError: true,
-		},
-		{
-			name:  "Rode host",
-			flags: []string{"--rode-host=bar"},
-			expected: &Config{
+			}),
+			Entry("Rode host flag", []string{"--rode-host=bar"}, &Config{
 				GrpcPort: 8082,
 				HttpPort: 8083,
 				Debug:    false,
 				RodeConfig: &RodeConfig{
 					Host: "bar",
 				},
-			},
-		},
-		{
-			name:  "Rode insecure",
-			flags: []string{"--rode-insecure=true"},
-			expected: &Config{
+			}),
+			Entry("Rode insecure flag", []string{"--rode-insecure=true"}, &Config{
 				GrpcPort: 8082,
 				HttpPort: 8083,
 				Debug:    false,
@@ -78,22 +64,7 @@ func TestConfig(t *testing.T) {
 					Host:     "rode:50051",
 					Insecure: true,
 				},
-			},
-		},
-	} {
-		tc := tc
-
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
-			c, err := Build("collector-build", tc.flags)
-
-			if tc.expectError {
-				Expect(err).To(HaveOccurred())
-			} else {
-				Expect(err).ToNot(HaveOccurred())
-				Expect(c).To(BeEquivalentTo(tc.expected))
-			}
-		})
-	}
-}
+			}),
+		)
+	})
+})
