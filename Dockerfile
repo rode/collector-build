@@ -25,4 +25,3 @@ COPY --from=builder /workspace/collector-build .
 USER nonroot:nonroot
 
 ENTRYPOINT ["./collector-build"]
-EXPOSE 8080
