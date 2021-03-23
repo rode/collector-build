@@ -101,7 +101,6 @@ func main() {
 
 	logger.Info("listening", zap.String("host", lis.Addr().String()))
 
-
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
 
