@@ -1,4 +1,4 @@
-.PHONY: test fmtcheck vet fmt coverage license
+.PHONY: test fmtcheck vet fmt coverage license mocks
 MAKEFLAGS += --silent
 GOFMT_FILES?=$$(find . -name '*.go' | grep -v proto)
 LICENSE_FILES=$$(find -E . -regex '.*\.(go|proto)')
@@ -17,6 +17,9 @@ fmt:
 
 license:
 	addlicense -c 'The Rode Authors' $(LICENSE_FILES)
+
+mocks:
+	mockgen -package mocks github.com/rode/rode/proto/v1alpha1 RodeClient > mocks/rode_client.go
 
 vet:
 	go vet ./...
