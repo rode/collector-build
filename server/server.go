@@ -150,3 +150,35 @@ func mapRequestToBuildOccurrence(log *zap.Logger, request *v1alpha1.CreateBuildR
 		},
 	}, nil
 }
+
+func (s *BuildCollectorServer) UpdateBuildArtifacts(ctx context.Context, request *v1alpha1.UpdateBuildArtifactsRequest) (*v1alpha1.UpdateBuildArtifactsResponse, error) {
+	log := s.logger.Named("UpdateBuildArtifacts")
+	filter := fmt.Sprintf(`build.provenance.builtArtifacts.nestedFilter(id == "%s")`, request.ExistingArtifact)
+
+	response, err := s.rode.ListOccurrences(ctx, &pb.ListOccurrencesRequest{Filter: filter})
+	if err != nil {
+		log.Error("Error occurred when calling List Occurrences", zap.Error(err))
+
+		return nil, status.Errorf(codes.Internal, "Error finding existing artifact in Rode: %s", err)
+	}
+
+	return &v1alpha1.UpdateBuildArtifactsResponse{
+		BuildOccurrenceId: "Hello",
+	}, nil
+}
+
+// func validateCreateBuildRequest(request *v1alpha1.CreateBuildRequest) error {
+// 	if len(request.Repository) == 0 {
+// 		return errors.New("no repository specified")
+// 	}
+
+// 	if len(request.Artifacts) == 0 {
+// 		return errors.New("no artifacts specified")
+// 	}
+
+// 	if len(request.CommitId) == 0 {
+// 		return errors.New("no commit ID specified")
+// 	}
+
+// 	return nil
+// }

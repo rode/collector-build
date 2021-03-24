@@ -27,6 +27,12 @@ service BuildCollector {
       body: "*"
     };
   }
+  rpc UpdateBuildArtifacts(UpdateBuildArtifactsRequest) returns (UpdateBuildArtifactsResponse) {
+    option (google.api.http) = {
+      put: "/v1alpha1/builds"
+      body: "*"
+    };
+  }
 }
 
 message CreateBuildRequest {
@@ -39,5 +45,15 @@ message CreateBuildRequest {
 
 message CreateBuildResponse {
   // Unique id of the new build occurrence
+  string build_occurrence_id = 1;
+}
+
+message UpdateBuildArtifactsRequest {
+  string existing_artifact = 1;
+  string new_artifact = 2;
+}
+
+message UpdateBuildArtifactsResponse {
+  // Unique id of the updated build occurrence
   string build_occurrence_id = 1;
 }
