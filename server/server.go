@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"strings"
 
 	"github.com/golang/protobuf/ptypes"
 	"github.com/google/uuid"
@@ -30,6 +31,7 @@ import (
 	"github.com/rode/rode/protodeps/grafeas/proto/v1beta1/provenance_go_proto"
 	"github.com/rode/rode/protodeps/grafeas/proto/v1beta1/source_go_proto"
 	"go.uber.org/zap"
+	"google.golang.org/genproto/protobuf/field_mask"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -161,9 +163,31 @@ func (s *BuildCollectorServer) UpdateBuildArtifacts(ctx context.Context, request
 
 		return nil, status.Errorf(codes.Internal, "Error finding existing artifact in Rode: %s", err)
 	}
+	occurrenceId := strings.Split(response.Occurrences[0].Name, "/")
+
+	log.Info("list response", zap.Any("list response", response))
+	response.Occurrences[0].GetBuild().Provenance.BuiltArtifacts = append(
+		response.Occurrences[0].GetBuild().Provenance.BuiltArtifacts,
+		&provenance_go_proto.Artifact{
+			Id: request.NewArtifact})
+
+	res, err := s.rode.UpdateOccurrence(ctx, &pb.UpdateOccurrenceRequest{
+		Id:         occurrenceId[len(occurrenceId)-1],
+		Occurrence: response.Occurrences[0],
+		UpdateMask: &field_mask.FieldMask{
+			Paths: []string{"Details.Build.Provenance.BuiltArtifacts"},
+		}})
+
+	log.Info("update response", zap.Any("update response", res))
+
+	if err != nil {
+		log.Error("Error occurred when calling Update Occurrence", zap.Error(err))
+
+		return nil, status.Errorf(codes.Internal, "Error updating existing artifact in Rode: %s", err)
+	}
 
 	return &v1alpha1.UpdateBuildArtifactsResponse{
-		BuildOccurrenceId: "Hello",
+		BuildOccurrenceId: res.Name,
 	}, nil
 }
 
