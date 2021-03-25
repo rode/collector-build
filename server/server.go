@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"sort"
 	"strings"
 
 	"github.com/golang/protobuf/ptypes"
@@ -37,8 +38,9 @@ import (
 )
 
 const (
-	rodeProjectId      = "projects/rode"
-	buildCollectorNote = rodeProjectId + "/notes/build_collector"
+	rodeProjectId                 = "projects/rode"
+	buildCollectorNote            = rodeProjectId + "/notes/build_collector"
+	buildOccurrenceArtifactFilter = `build.provenance.builtArtifacts.nestedFilter(id == "%s")`
 )
 
 var (
@@ -91,8 +93,82 @@ func (s *BuildCollectorServer) CreateBuild(ctx context.Context, request *v1alpha
 	newOccurrence := response.Occurrences[0]
 
 	return &v1alpha1.CreateBuildResponse{
-		BuildOccurrenceId: newOccurrence.Name,
+		BuildOccurrenceId: extractOccurrenceIdFromName(newOccurrence.Name),
 	}, nil
+}
+
+func (s *BuildCollectorServer) UpdateBuildArtifacts(ctx context.Context, request *v1alpha1.UpdateBuildArtifactsRequest) (*v1alpha1.UpdateBuildArtifactsResponse, error) {
+	log := s.logger.Named("UpdateBuildArtifacts").With(zap.String("existingArtifact", request.ExistingArtifact), zap.String("newArtifact", request.NewArtifact))
+	log.Debug("Received request")
+
+	if err := validateUpdateBuildArtifactsRequest(request); err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "Invalid request: %s", err)
+	}
+
+	artifactFilter := fmt.Sprintf(buildOccurrenceArtifactFilter, request.ExistingArtifact)
+
+	response, err := s.rode.ListOccurrences(ctx, &pb.ListOccurrencesRequest{Filter: artifactFilter})
+	if err != nil {
+		log.Error("Error occurred when calling ListOccurrences", zap.Error(err))
+
+		return nil, status.Errorf(codes.Internal, "Error finding existing artifact in Rode: %s", err)
+	}
+	log.Debug("ListOccurrences response", zap.Any("response", response))
+
+	if len(response.Occurrences) == 0 {
+		log.Error("No occurrence found for artifact")
+		return nil, status.Errorf(codes.InvalidArgument, "No occurrence found for artifact: %s", request.ExistingArtifact)
+	}
+
+	if len(response.Occurrences) > 1 {
+		log.Warn("More than one occurrence found for artifact, taking earliest")
+	}
+
+	sort.Slice(response.Occurrences, func(l, r int) bool {
+		left := response.Occurrences[l].CreateTime.AsTime()
+		right := response.Occurrences[r].CreateTime.AsTime()
+
+		return left.Before(right)
+	})
+	occurrence := response.Occurrences[0]
+
+	occurrence.GetBuild().Provenance.BuiltArtifacts = append(
+		occurrence.GetBuild().Provenance.BuiltArtifacts,
+		&provenance_go_proto.Artifact{
+			Id: request.NewArtifact,
+		},
+	)
+
+	res, err := s.rode.UpdateOccurrence(ctx, &pb.UpdateOccurrenceRequest{
+		Id:         extractOccurrenceIdFromName(occurrence.Name),
+		Occurrence: occurrence,
+		UpdateMask: &field_mask.FieldMask{
+			Paths: []string{"Details.Build.Provenance.BuiltArtifacts"},
+		}})
+
+	log.Debug("UpdateOccurrence response", zap.Any("response", res))
+
+	if err != nil {
+		log.Error("Error calling UpdateOccurrence", zap.Error(err))
+
+		return nil, status.Errorf(codes.Internal, "Error updating existing artifact in Rode: %s", err)
+	}
+
+	return &v1alpha1.UpdateBuildArtifactsResponse{
+		BuildOccurrenceId: extractOccurrenceIdFromName(res.Name),
+	}, nil
+}
+
+func validateUpdateBuildArtifactsRequest(request *v1alpha1.UpdateBuildArtifactsRequest) error {
+	if len(request.NewArtifact) == 0 {
+		return errors.New("new artifact must be specified")
+	}
+
+	if len(request.ExistingArtifact) == 0 {
+		return errors.New("existing artifact must be specified")
+	}
+
+	return nil
 }
 
 func validateCreateBuildRequest(request *v1alpha1.CreateBuildRequest) error {
@@ -153,56 +229,8 @@ func mapRequestToBuildOccurrence(log *zap.Logger, request *v1alpha1.CreateBuildR
 	}, nil
 }
 
-func (s *BuildCollectorServer) UpdateBuildArtifacts(ctx context.Context, request *v1alpha1.UpdateBuildArtifactsRequest) (*v1alpha1.UpdateBuildArtifactsResponse, error) {
-	log := s.logger.Named("UpdateBuildArtifacts")
-	filter := fmt.Sprintf(`build.provenance.builtArtifacts.nestedFilter(id == "%s")`, request.ExistingArtifact)
+func extractOccurrenceIdFromName(occurrenceName string) string {
+	namePieces := strings.Split(occurrenceName, "/")
 
-	response, err := s.rode.ListOccurrences(ctx, &pb.ListOccurrencesRequest{Filter: filter})
-	if err != nil {
-		log.Error("Error occurred when calling List Occurrences", zap.Error(err))
-
-		return nil, status.Errorf(codes.Internal, "Error finding existing artifact in Rode: %s", err)
-	}
-	occurrenceId := strings.Split(response.Occurrences[0].Name, "/")
-
-	log.Info("list response", zap.Any("list response", response))
-	response.Occurrences[0].GetBuild().Provenance.BuiltArtifacts = append(
-		response.Occurrences[0].GetBuild().Provenance.BuiltArtifacts,
-		&provenance_go_proto.Artifact{
-			Id: request.NewArtifact})
-
-	res, err := s.rode.UpdateOccurrence(ctx, &pb.UpdateOccurrenceRequest{
-		Id:         occurrenceId[len(occurrenceId)-1],
-		Occurrence: response.Occurrences[0],
-		UpdateMask: &field_mask.FieldMask{
-			Paths: []string{"Details.Build.Provenance.BuiltArtifacts"},
-		}})
-
-	log.Info("update response", zap.Any("update response", res))
-
-	if err != nil {
-		log.Error("Error occurred when calling Update Occurrence", zap.Error(err))
-
-		return nil, status.Errorf(codes.Internal, "Error updating existing artifact in Rode: %s", err)
-	}
-
-	return &v1alpha1.UpdateBuildArtifactsResponse{
-		BuildOccurrenceId: res.Name,
-	}, nil
+	return namePieces[len(namePieces)-1]
 }
-
-// func validateCreateBuildRequest(request *v1alpha1.CreateBuildRequest) error {
-// 	if len(request.Repository) == 0 {
-// 		return errors.New("no repository specified")
-// 	}
-
-// 	if len(request.Artifacts) == 0 {
-// 		return errors.New("no artifacts specified")
-// 	}
-
-// 	if len(request.CommitId) == 0 {
-// 		return errors.New("no commit ID specified")
-// 	}
-
-// 	return nil
-// }
