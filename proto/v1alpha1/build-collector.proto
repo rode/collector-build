@@ -34,9 +34,10 @@ message CreateBuildRequest {
   string repository = 1;
   // Any generated outputs of the build
   repeated string artifacts = 2;
+  string commit_id = 3;
 }
 
 message CreateBuildResponse {
   // Unique id of the new build occurrence
-  string buildOccurrenceId = 1;
+  string build_occurrence_id = 1;
 }
