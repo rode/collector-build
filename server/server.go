@@ -146,13 +146,13 @@ func (s *BuildCollectorServer) UpdateBuildArtifacts(ctx context.Context, request
 			Paths: []string{"details.build.provenance.built_artifacts"},
 		}})
 
-	log.Debug("UpdateOccurrence response", zap.Any("response", res))
-
 	if err != nil {
 		log.Error("Error calling UpdateOccurrence", zap.Error(err))
 
 		return nil, status.Errorf(codes.Internal, "Error updating existing artifact in Rode: %s", err)
 	}
+
+	log.Debug("UpdateOccurrence response", zap.Any("response", res))
 
 	return &v1alpha1.UpdateBuildArtifactsResponse{
 		BuildOccurrenceId: extractOccurrenceIdFromName(res.Name),
