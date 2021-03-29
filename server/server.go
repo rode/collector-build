@@ -117,7 +117,7 @@ func (s *BuildCollectorServer) UpdateBuildArtifacts(ctx context.Context, request
 
 	if len(response.Occurrences) == 0 {
 		log.Error("No occurrence found for artifact")
-		return nil, status.Errorf(codes.InvalidArgument, "No occurrence found for artifact: %s", request.ExistingArtifact)
+		return nil, status.Errorf(codes.NotFound, "No occurrence found for artifact: %s", request.ExistingArtifact)
 	}
 
 	if len(response.Occurrences) > 1 {
@@ -143,7 +143,7 @@ func (s *BuildCollectorServer) UpdateBuildArtifacts(ctx context.Context, request
 		Id:         extractOccurrenceIdFromName(occurrence.Name),
 		Occurrence: occurrence,
 		UpdateMask: &field_mask.FieldMask{
-			Paths: []string{"Details.Build.Provenance.BuiltArtifacts"},
+			Paths: []string{"details.build.provenance.built_artifacts"},
 		}})
 
 	log.Debug("UpdateOccurrence response", zap.Any("response", res))
@@ -191,7 +191,7 @@ func mapRequestToBuildOccurrence(log *zap.Logger, request *v1alpha1.CreateBuildR
 	repositoryURL, err := url.ParseRequestURI(request.Repository)
 	if err != nil {
 		log.Error("Invalid repository url", zap.Error(err))
-		return nil, status.Errorf(codes.InvalidArgument, "Invalid Repository URL: %s", err)
+		return nil, status.Errorf(codes.InvalidArgument, "Invalid repository url: %s", err)
 	}
 
 	var artifacts []*provenance_go_proto.Artifact

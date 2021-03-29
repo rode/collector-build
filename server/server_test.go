@@ -183,7 +183,7 @@ var _ = Describe("Server", func() {
 					s := getGRPCStatusFromError(actualError)
 
 					Expect(s.Code()).To(Equal(codes.InvalidArgument))
-					Expect(s.Message()).To(ContainSubstring("Invalid Repository URL"))
+					Expect(s.Message()).To(ContainSubstring("Invalid repository url"))
 				})
 			})
 
@@ -345,7 +345,7 @@ var _ = Describe("Server", func() {
 				It("should set the update mask to only change the artifacts", func() {
 					actualMask := actualUpdateOccurrenceRequest.UpdateMask
 
-					Expect(actualMask.Paths).To(ConsistOf("Details.Build.Provenance.BuiltArtifacts"))
+					Expect(actualMask.Paths).To(ConsistOf("details.build.provenance.built_artifacts"))
 				})
 
 				It("should return the occurrence id", func() {
@@ -458,7 +458,7 @@ var _ = Describe("Server", func() {
 				It("should set the status to invalid argument", func() {
 					s := getGRPCStatusFromError(actualError)
 
-					Expect(s.Code()).To(Equal(codes.InvalidArgument))
+					Expect(s.Code()).To(Equal(codes.NotFound))
 					Expect(s.Message()).To(ContainSubstring("No occurrence found for artifact"))
 				})
 			})
