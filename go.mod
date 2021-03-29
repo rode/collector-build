@@ -8,7 +8,6 @@ require (
 	github.com/golang/protobuf v1.4.3
 	github.com/google/uuid v1.1.2
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.2.0
-	github.com/grpc-ecosystem/grpc-health-probe v0.3.6 // indirect
 	github.com/onsi/ginkgo v1.14.2
 	github.com/onsi/gomega v1.11.0
 	github.com/rode/rode v0.2.0
