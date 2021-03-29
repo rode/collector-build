@@ -2,6 +2,10 @@
 # Build the manager binary
 FROM golang:1.15-alpine as builder
 
+ENV GRPC_HEALTH_PROBE_VERSION="v0.3.6"
+RUN wget -qO/bin/grpc_health_probe https://github.com/grpc-ecosystem/grpc-health-probe/releases/download/${GRPC_HEALTH_PROBE_VERSION}/grpc_health_probe-linux-amd64 && \
+    chmod +x /bin/grpc_health_probe
+
 WORKDIR /workspace
 
 RUN apk add --no-cache git
@@ -26,6 +30,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build CGO_ENABLED=0 GOOS=linux GOA
 FROM gcr.io/distroless/static:nonroot as runner
 WORKDIR /
 COPY --from=builder /workspace/collector-build .
+COPY --from=builder /bin/grpc_health_probe .
 USER nonroot:nonroot
 
 ENTRYPOINT ["./collector-build"]
