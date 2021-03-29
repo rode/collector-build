@@ -8,6 +8,7 @@ import (
 	context "context"
 	gomock "github.com/golang/mock/gomock"
 	v1alpha1 "github.com/rode/rode/proto/v1alpha1"
+	grafeas_go_proto "github.com/rode/rode/protodeps/grafeas/proto/v1beta1/grafeas_go_proto"
 	grpc "google.golang.org/grpc"
 	emptypb "google.golang.org/protobuf/types/known/emptypb"
 	reflect "reflect"
@@ -194,4 +195,64 @@ func (mr *MockRodeClientMockRecorder) ListResources(arg0, arg1 interface{}, arg2
 	mr.mock.ctrl.T.Helper()
 	varargs := append([]interface{}{arg0, arg1}, arg2...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListResources", reflect.TypeOf((*MockRodeClient)(nil).ListResources), varargs...)
+}
+
+// UpdateOccurrence mocks base method
+func (m *MockRodeClient) UpdateOccurrence(arg0 context.Context, arg1 *v1alpha1.UpdateOccurrenceRequest, arg2 ...grpc.CallOption) (*grafeas_go_proto.Occurrence, error) {
+	m.ctrl.T.Helper()
+	varargs := []interface{}{arg0, arg1}
+	for _, a := range arg2 {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "UpdateOccurrence", varargs...)
+	ret0, _ := ret[0].(*grafeas_go_proto.Occurrence)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// UpdateOccurrence indicates an expected call of UpdateOccurrence
+func (mr *MockRodeClientMockRecorder) UpdateOccurrence(arg0, arg1 interface{}, arg2 ...interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]interface{}{arg0, arg1}, arg2...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateOccurrence", reflect.TypeOf((*MockRodeClient)(nil).UpdateOccurrence), varargs...)
+}
+
+// UpdatePolicy mocks base method
+func (m *MockRodeClient) UpdatePolicy(arg0 context.Context, arg1 *v1alpha1.UpdatePolicyRequest, arg2 ...grpc.CallOption) (*v1alpha1.Policy, error) {
+	m.ctrl.T.Helper()
+	varargs := []interface{}{arg0, arg1}
+	for _, a := range arg2 {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "UpdatePolicy", varargs...)
+	ret0, _ := ret[0].(*v1alpha1.Policy)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// UpdatePolicy indicates an expected call of UpdatePolicy
+func (mr *MockRodeClientMockRecorder) UpdatePolicy(arg0, arg1 interface{}, arg2 ...interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]interface{}{arg0, arg1}, arg2...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdatePolicy", reflect.TypeOf((*MockRodeClient)(nil).UpdatePolicy), varargs...)
+}
+
+// ValidatePolicy mocks base method
+func (m *MockRodeClient) ValidatePolicy(arg0 context.Context, arg1 *v1alpha1.ValidatePolicyRequest, arg2 ...grpc.CallOption) (*v1alpha1.ValidatePolicyResponse, error) {
+	m.ctrl.T.Helper()
+	varargs := []interface{}{arg0, arg1}
+	for _, a := range arg2 {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "ValidatePolicy", varargs...)
+	ret0, _ := ret[0].(*v1alpha1.ValidatePolicyResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ValidatePolicy indicates an expected call of ValidatePolicy
+func (mr *MockRodeClientMockRecorder) ValidatePolicy(arg0, arg1 interface{}, arg2 ...interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]interface{}{arg0, arg1}, arg2...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ValidatePolicy", reflect.TypeOf((*MockRodeClient)(nil).ValidatePolicy), varargs...)
 }

@@ -19,6 +19,8 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"sort"
+	"strings"
 
 	"github.com/golang/protobuf/ptypes"
 	"github.com/google/uuid"
@@ -30,13 +32,15 @@ import (
 	"github.com/rode/rode/protodeps/grafeas/proto/v1beta1/provenance_go_proto"
 	"github.com/rode/rode/protodeps/grafeas/proto/v1beta1/source_go_proto"
 	"go.uber.org/zap"
+	"google.golang.org/genproto/protobuf/field_mask"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
 const (
-	rodeProjectId      = "projects/rode"
-	buildCollectorNote = rodeProjectId + "/notes/build_collector"
+	rodeProjectId                 = "projects/rode"
+	buildCollectorNote            = rodeProjectId + "/notes/build_collector"
+	buildOccurrenceArtifactFilter = `build.provenance.builtArtifacts.nestedFilter(id == "%s")`
 )
 
 var (
@@ -89,8 +93,82 @@ func (s *BuildCollectorServer) CreateBuild(ctx context.Context, request *v1alpha
 	newOccurrence := response.Occurrences[0]
 
 	return &v1alpha1.CreateBuildResponse{
-		BuildOccurrenceId: newOccurrence.Name,
+		BuildOccurrenceId: extractOccurrenceIdFromName(newOccurrence.Name),
 	}, nil
+}
+
+func (s *BuildCollectorServer) UpdateBuildArtifacts(ctx context.Context, request *v1alpha1.UpdateBuildArtifactsRequest) (*v1alpha1.UpdateBuildArtifactsResponse, error) {
+	log := s.logger.Named("UpdateBuildArtifacts").With(zap.String("existingArtifact", request.ExistingArtifact), zap.String("newArtifact", request.NewArtifact))
+	log.Debug("Received request")
+
+	if err := validateUpdateBuildArtifactsRequest(request); err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "Invalid request: %s", err)
+	}
+
+	artifactFilter := fmt.Sprintf(buildOccurrenceArtifactFilter, request.ExistingArtifact)
+
+	response, err := s.rode.ListOccurrences(ctx, &pb.ListOccurrencesRequest{Filter: artifactFilter})
+	if err != nil {
+		log.Error("Error occurred when calling ListOccurrences", zap.Error(err))
+
+		return nil, status.Errorf(codes.Internal, "Error finding existing artifact in Rode: %s", err)
+	}
+	log.Debug("ListOccurrences response", zap.Any("response", response))
+
+	if len(response.Occurrences) == 0 {
+		log.Error("No occurrence found for artifact")
+		return nil, status.Errorf(codes.NotFound, "No occurrence found for artifact: %s", request.ExistingArtifact)
+	}
+
+	if len(response.Occurrences) > 1 {
+		log.Warn("More than one occurrence found for artifact, taking earliest")
+	}
+
+	sort.Slice(response.Occurrences, func(l, r int) bool {
+		left := response.Occurrences[l].CreateTime.AsTime()
+		right := response.Occurrences[r].CreateTime.AsTime()
+
+		return left.Before(right)
+	})
+	occurrence := response.Occurrences[0]
+
+	occurrence.GetBuild().Provenance.BuiltArtifacts = append(
+		occurrence.GetBuild().Provenance.BuiltArtifacts,
+		&provenance_go_proto.Artifact{
+			Id: request.NewArtifact,
+		},
+	)
+
+	res, err := s.rode.UpdateOccurrence(ctx, &pb.UpdateOccurrenceRequest{
+		Id:         extractOccurrenceIdFromName(occurrence.Name),
+		Occurrence: occurrence,
+		UpdateMask: &field_mask.FieldMask{
+			Paths: []string{"details.build.provenance.built_artifacts"},
+		}})
+
+	if err != nil {
+		log.Error("Error calling UpdateOccurrence", zap.Error(err))
+
+		return nil, status.Errorf(codes.Internal, "Error updating existing artifact in Rode: %s", err)
+	}
+
+	log.Debug("UpdateOccurrence response", zap.Any("response", res))
+
+	return &v1alpha1.UpdateBuildArtifactsResponse{
+		BuildOccurrenceId: extractOccurrenceIdFromName(res.Name),
+	}, nil
+}
+
+func validateUpdateBuildArtifactsRequest(request *v1alpha1.UpdateBuildArtifactsRequest) error {
+	if len(request.NewArtifact) == 0 {
+		return errors.New("new artifact must be specified")
+	}
+
+	if len(request.ExistingArtifact) == 0 {
+		return errors.New("existing artifact must be specified")
+	}
+
+	return nil
 }
 
 func validateCreateBuildRequest(request *v1alpha1.CreateBuildRequest) error {
@@ -113,7 +191,7 @@ func mapRequestToBuildOccurrence(log *zap.Logger, request *v1alpha1.CreateBuildR
 	repositoryURL, err := url.ParseRequestURI(request.Repository)
 	if err != nil {
 		log.Error("Invalid repository url", zap.Error(err))
-		return nil, status.Errorf(codes.InvalidArgument, "Invalid Repository URL: %s", err)
+		return nil, status.Errorf(codes.InvalidArgument, "Invalid repository url: %s", err)
 	}
 
 	var artifacts []*provenance_go_proto.Artifact
@@ -149,4 +227,10 @@ func mapRequestToBuildOccurrence(log *zap.Logger, request *v1alpha1.CreateBuildR
 			},
 		},
 	}, nil
+}
+
+func extractOccurrenceIdFromName(occurrenceName string) string {
+	namePieces := strings.Split(occurrenceName, "/")
+
+	return namePieces[len(namePieces)-1]
 }

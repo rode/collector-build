@@ -18,6 +18,7 @@ const _ = grpc.SupportPackageIsVersion7
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type BuildCollectorClient interface {
 	CreateBuild(ctx context.Context, in *CreateBuildRequest, opts ...grpc.CallOption) (*CreateBuildResponse, error)
+	UpdateBuildArtifacts(ctx context.Context, in *UpdateBuildArtifactsRequest, opts ...grpc.CallOption) (*UpdateBuildArtifactsResponse, error)
 }
 
 type buildCollectorClient struct {
@@ -37,11 +38,21 @@ func (c *buildCollectorClient) CreateBuild(ctx context.Context, in *CreateBuildR
 	return out, nil
 }
 
+func (c *buildCollectorClient) UpdateBuildArtifacts(ctx context.Context, in *UpdateBuildArtifactsRequest, opts ...grpc.CallOption) (*UpdateBuildArtifactsResponse, error) {
+	out := new(UpdateBuildArtifactsResponse)
+	err := c.cc.Invoke(ctx, "/build_collector.v1alpha1.BuildCollector/UpdateBuildArtifacts", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // BuildCollectorServer is the server API for BuildCollector service.
 // All implementations should embed UnimplementedBuildCollectorServer
 // for forward compatibility
 type BuildCollectorServer interface {
 	CreateBuild(context.Context, *CreateBuildRequest) (*CreateBuildResponse, error)
+	UpdateBuildArtifacts(context.Context, *UpdateBuildArtifactsRequest) (*UpdateBuildArtifactsResponse, error)
 }
 
 // UnimplementedBuildCollectorServer should be embedded to have forward compatible implementations.
@@ -50,6 +61,9 @@ type UnimplementedBuildCollectorServer struct {
 
 func (UnimplementedBuildCollectorServer) CreateBuild(context.Context, *CreateBuildRequest) (*CreateBuildResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CreateBuild not implemented")
+}
+func (UnimplementedBuildCollectorServer) UpdateBuildArtifacts(context.Context, *UpdateBuildArtifactsRequest) (*UpdateBuildArtifactsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UpdateBuildArtifacts not implemented")
 }
 
 // UnsafeBuildCollectorServer may be embedded to opt out of forward compatibility for this service.
@@ -81,6 +95,24 @@ func _BuildCollector_CreateBuild_Handler(srv interface{}, ctx context.Context, d
 	return interceptor(ctx, in, info, handler)
 }
 
+func _BuildCollector_UpdateBuildArtifacts_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateBuildArtifactsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BuildCollectorServer).UpdateBuildArtifacts(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/build_collector.v1alpha1.BuildCollector/UpdateBuildArtifacts",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BuildCollectorServer).UpdateBuildArtifacts(ctx, req.(*UpdateBuildArtifactsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 var _BuildCollector_serviceDesc = grpc.ServiceDesc{
 	ServiceName: "build_collector.v1alpha1.BuildCollector",
 	HandlerType: (*BuildCollectorServer)(nil),
@@ -88,6 +120,10 @@ var _BuildCollector_serviceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CreateBuild",
 			Handler:    _BuildCollector_CreateBuild_Handler,
+		},
+		{
+			MethodName: "UpdateBuildArtifacts",
+			Handler:    _BuildCollector_UpdateBuildArtifacts_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

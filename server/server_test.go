@@ -16,7 +16,9 @@ package server
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/google/uuid"
@@ -25,11 +27,14 @@ import (
 	"github.com/rode/collector-build/mocks"
 	"github.com/rode/collector-build/proto/v1alpha1"
 	pb "github.com/rode/rode/proto/v1alpha1"
+	"github.com/rode/rode/protodeps/grafeas/proto/v1beta1/build_go_proto"
 	"github.com/rode/rode/protodeps/grafeas/proto/v1beta1/common_go_proto"
 	"github.com/rode/rode/protodeps/grafeas/proto/v1beta1/grafeas_go_proto"
+	"github.com/rode/rode/protodeps/grafeas/proto/v1beta1/provenance_go_proto"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 var _ = Describe("Server", func() {
@@ -84,7 +89,7 @@ var _ = Describe("Server", func() {
 			BeforeEach(func() {
 				expectedOccurrenceId = fake.LetterN(10)
 				newOccurrence := &grafeas_go_proto.Occurrence{
-					Name: expectedOccurrenceId,
+					Name: "projects/rode/occurrences/" + expectedOccurrenceId,
 				}
 
 				expectedProvenanceId = fake.UUID()
@@ -139,6 +144,10 @@ var _ = Describe("Server", func() {
 				Expect(source.Url).To(Equal(request.Repository))
 				Expect(source.RevisionId).To(Equal(request.CommitId))
 			})
+
+			It("should return the occurrence id", func() {
+				Expect(response.BuildOccurrenceId).To(Equal(expectedOccurrenceId))
+			})
 		})
 
 		Describe("request validation", func() {
@@ -174,7 +183,7 @@ var _ = Describe("Server", func() {
 					s := getGRPCStatusFromError(actualError)
 
 					Expect(s.Code()).To(Equal(codes.InvalidArgument))
-					Expect(s.Message()).To(ContainSubstring("Invalid Repository URL"))
+					Expect(s.Message()).To(ContainSubstring("Invalid repository url"))
 				})
 			})
 
@@ -262,6 +271,217 @@ var _ = Describe("Server", func() {
 			})
 		})
 	})
+
+	Describe("UpdateBuildArtifacts", func() {
+		var (
+			expectedOccurrenceId    string
+			request                 *v1alpha1.UpdateBuildArtifactsRequest
+			expectedOccurrence      *grafeas_go_proto.Occurrence
+			listOccurrencesResponse *pb.ListOccurrencesResponse
+
+			actualError    error
+			actualResponse *v1alpha1.UpdateBuildArtifactsResponse
+		)
+
+		BeforeEach(func() {
+			expectedOccurrenceId = fake.UUID()
+			request = &v1alpha1.UpdateBuildArtifactsRequest{
+				ExistingArtifact: fake.URL(),
+				NewArtifact:      fake.URL(),
+			}
+
+			expectedOccurrence = makeBuildOccurrence(expectedOccurrenceId, request.ExistingArtifact)
+
+			listOccurrencesResponse = &pb.ListOccurrencesResponse{
+				Occurrences: []*grafeas_go_proto.Occurrence{expectedOccurrence},
+			}
+		})
+
+		JustBeforeEach(func() {
+			actualResponse, actualError = server.UpdateBuildArtifacts(ctx, request)
+		})
+
+		Describe("successful occurrence update", func() {
+			var (
+				actualListOccurrencesRequest  *pb.ListOccurrencesRequest
+				actualUpdateOccurrenceRequest *pb.UpdateOccurrenceRequest
+			)
+
+			BeforeEach(func() {
+				rodeClient.EXPECT().
+					UpdateOccurrence(ctx, gomock.Any()).
+					Do(func(_ context.Context, req *pb.UpdateOccurrenceRequest) {
+						actualUpdateOccurrenceRequest = req
+					}).Return(expectedOccurrence, nil)
+
+				rodeClient.EXPECT().
+					ListOccurrences(ctx, gomock.Any()).
+					Do(func(_ context.Context, req *pb.ListOccurrencesRequest) {
+						actualListOccurrencesRequest = req
+					}).
+					Return(listOccurrencesResponse, nil)
+			})
+
+			When("there's a single matching occurrence to update", func() {
+				It("should filter all occurrences using the existing artifact", func() {
+					expectedFilter := fmt.Sprintf(`build.provenance.builtArtifacts.nestedFilter(id == "%s")`, request.ExistingArtifact)
+
+					Expect(actualListOccurrencesRequest.Filter).To(Equal(expectedFilter))
+				})
+
+				It("should append the new artifact", func() {
+					actualArtifacts := actualUpdateOccurrenceRequest.Occurrence.GetBuild().Provenance.BuiltArtifacts
+
+					Expect(actualArtifacts).To(ConsistOf(
+						&provenance_go_proto.Artifact{
+							Id: request.ExistingArtifact,
+						},
+						&provenance_go_proto.Artifact{
+							Id: request.NewArtifact,
+						},
+					))
+				})
+
+				It("should set the update mask to only change the artifacts", func() {
+					actualMask := actualUpdateOccurrenceRequest.UpdateMask
+
+					Expect(actualMask.Paths).To(ConsistOf("details.build.provenance.built_artifacts"))
+				})
+
+				It("should return the occurrence id", func() {
+					Expect(actualResponse.BuildOccurrenceId).To(Equal(expectedOccurrenceId))
+				})
+			})
+
+			When("there are multiple occurrences tied to an artifact", func() {
+				var (
+					newestBuildOccurrence *grafeas_go_proto.Occurrence
+					oldestBuildOccurrence *grafeas_go_proto.Occurrence
+				)
+
+				BeforeEach(func() {
+					createTime := time.Now()
+
+					oldestBuildOccurrence = makeBuildOccurrence(expectedOccurrenceId, request.ExistingArtifact)
+					oldestBuildOccurrence.CreateTime = timestamppb.New(createTime)
+
+					newestBuildOccurrence = makeBuildOccurrence(fake.UUID(), request.ExistingArtifact)
+					newestBuildOccurrence.CreateTime = timestamppb.New(createTime.Add(time.Minute * 5))
+
+					listOccurrencesResponse.Occurrences = []*grafeas_go_proto.Occurrence{
+						newestBuildOccurrence,
+						oldestBuildOccurrence,
+					}
+				})
+
+				It("should update the oldest build occurrence", func() {
+					Expect(actualUpdateOccurrenceRequest.Id).To(Equal(expectedOccurrenceId))
+				})
+			})
+		})
+
+		Describe("updating the occurrence is unsuccessful", func() {
+			var (
+				expectedError error
+			)
+
+			BeforeEach(func() {
+				expectedError = errors.New(fake.Word())
+			})
+
+			Describe("request validation", func() {
+				When("request is missing the existing artifact slug", func() {
+					BeforeEach(func() {
+						request.ExistingArtifact = ""
+					})
+
+					It("should return an error", func() {
+						Expect(actualError).To(HaveOccurred())
+						Expect(actualResponse).To(BeNil())
+					})
+
+					It("should set the status to invalid argument", func() {
+						s := getGRPCStatusFromError(actualError)
+
+						Expect(s.Code()).To(Equal(codes.InvalidArgument))
+						Expect(s.Message()).To(Equal("Invalid request: existing artifact must be specified"))
+					})
+				})
+
+				When("request is missing the new artifact slug", func() {
+					BeforeEach(func() {
+						request.NewArtifact = ""
+					})
+
+					It("should return an error", func() {
+						Expect(actualError).To(HaveOccurred())
+						Expect(actualResponse).To(BeNil())
+					})
+
+					It("should set the status to invalid argument", func() {
+						s := getGRPCStatusFromError(actualError)
+
+						Expect(s.Code()).To(Equal(codes.InvalidArgument))
+						Expect(s.Message()).To(Equal("Invalid request: new artifact must be specified"))
+					})
+				})
+			})
+
+			When("an error occurs listing occurrences", func() {
+				BeforeEach(func() {
+					rodeClient.EXPECT().ListOccurrences(gomock.Any(), gomock.Any()).Return(nil, expectedError)
+				})
+
+				It("should return an error", func() {
+					Expect(actualError).To(HaveOccurred())
+				})
+
+				It("should set the status to internal server error", func() {
+					s := getGRPCStatusFromError(actualError)
+
+					Expect(s.Code()).To(Equal(codes.Internal))
+					Expect(s.Message()).To(ContainSubstring(expectedError.Error()))
+				})
+			})
+
+			When("no occurrences have matching artifacts", func() {
+				BeforeEach(func() {
+					listOccurrencesResponse.Occurrences = []*grafeas_go_proto.Occurrence{}
+
+					rodeClient.EXPECT().ListOccurrences(gomock.Any(), gomock.Any()).Return(listOccurrencesResponse, nil)
+				})
+
+				It("should return an error", func() {
+					Expect(actualError).To(HaveOccurred())
+				})
+
+				It("should set the status to invalid argument", func() {
+					s := getGRPCStatusFromError(actualError)
+
+					Expect(s.Code()).To(Equal(codes.NotFound))
+					Expect(s.Message()).To(ContainSubstring("No occurrence found for artifact"))
+				})
+			})
+
+			When("the call to UpdateOccurrence fails", func() {
+				BeforeEach(func() {
+					rodeClient.EXPECT().ListOccurrences(gomock.Any(), gomock.Any()).Return(listOccurrencesResponse, nil)
+					rodeClient.EXPECT().UpdateOccurrence(gomock.Any(), gomock.Any()).Return(nil, expectedError)
+				})
+
+				It("should return an error", func() {
+					Expect(actualError).To(HaveOccurred())
+				})
+
+				It("should set the status to internal server error", func() {
+					s := getGRPCStatusFromError(actualError)
+
+					Expect(s.Code()).To(Equal(codes.Internal))
+					Expect(s.Message()).To(ContainSubstring("Error updating existing artifact in Rode"))
+				})
+			})
+		})
+	})
 })
 
 func getGRPCStatusFromError(err error) *status.Status {
@@ -269,4 +489,21 @@ func getGRPCStatusFromError(err error) *status.Status {
 	Expect(ok).To(BeTrue(), "Expected error to be a gRPC status")
 
 	return s
+}
+
+func makeBuildOccurrence(occurrenceId, artifact string) *grafeas_go_proto.Occurrence {
+	return &grafeas_go_proto.Occurrence{
+		Name: fmt.Sprintf("projects/rode/occurrences/%s", occurrenceId),
+		Details: &grafeas_go_proto.Occurrence_Build{
+			Build: &build_go_proto.Details{
+				Provenance: &provenance_go_proto.BuildProvenance{
+					BuiltArtifacts: []*provenance_go_proto.Artifact{
+						{
+							Id: artifact,
+						},
+					},
+				},
+			},
+		},
+	}
 }
