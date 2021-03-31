@@ -15,8 +15,14 @@
 package config
 
 import (
+	"encoding/json"
+	"fmt"
+	"net/http"
+
+	"github.com/jarcoal/httpmock"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
+	rodeconfig "github.com/rode/rode/config"
 
 	. "github.com/onsi/gomega"
 )
@@ -32,6 +38,7 @@ var _ = Describe("Config", func() {
 			Entry("bad grpc port", []string{"--grpc-port=foo"}),
 			Entry("bad http port", []string{"--http-port=bar"}),
 			Entry("bad debug", []string{"--debug=baz"}),
+			Entry("jwt required audience without issuer", []string{"--jwt-required-audience=foo"}),
 		)
 
 		DescribeTable("successful configuration", func(flags []string, expected interface{}) {
@@ -41,6 +48,9 @@ var _ = Describe("Config", func() {
 			Expect(c).To(Equal(expected))
 		},
 			Entry("default config", []string{}, &Config{
+				Auth: &rodeconfig.AuthConfig{
+					JWT: &rodeconfig.JWTAuthConfig{},
+				},
 				GrpcPort: 8082,
 				HttpPort: 8083,
 				Debug:    false,
@@ -49,6 +59,9 @@ var _ = Describe("Config", func() {
 				},
 			}),
 			Entry("Rode host flag", []string{"--rode-host=bar"}, &Config{
+				Auth: &rodeconfig.AuthConfig{
+					JWT: &rodeconfig.JWTAuthConfig{},
+				},
 				GrpcPort: 8082,
 				HttpPort: 8083,
 				Debug:    false,
@@ -57,6 +70,9 @@ var _ = Describe("Config", func() {
 				},
 			}),
 			Entry("Rode insecure flag", []string{"--rode-insecure=true"}, &Config{
+				Auth: &rodeconfig.AuthConfig{
+					JWT: &rodeconfig.JWTAuthConfig{},
+				},
 				GrpcPort: 8082,
 				HttpPort: 8083,
 				Debug:    false,
@@ -66,5 +82,89 @@ var _ = Describe("Config", func() {
 				},
 			}),
 		)
+
+		Describe("jwt authn configuration", func() {
+			type discoveryDocument struct {
+				Issuer      string   `json:"issuer"`
+				AuthURL     string   `json:"authorization_endpoint"`
+				TokenURL    string   `json:"token_endpoint"`
+				JWKSURL     string   `json:"jwks_uri"`
+				UserInfoURL string   `json:"userinfo_endpoint"`
+				Algorithms  []string `json:"id_token_signing_alg_values_supported"`
+			}
+
+			issuer := "http://localhost:8080/auth/realms/test"
+			oidcWellKnown := "/.well-known/openid-configuration"
+
+			responseBytes, err := json.Marshal(&discoveryDocument{
+				Issuer:      issuer,
+				AuthURL:     "",
+				TokenURL:    "",
+				JWKSURL:     "",
+				UserInfoURL: "",
+				Algorithms:  []string{""},
+			})
+			Expect(err).ToNot(HaveOccurred())
+			responseBody := string(responseBytes)
+
+			var (
+				actualError       error
+				config            *Config
+				discoveryResponse *http.Response
+				flags             []string
+			)
+
+			BeforeEach(func() {
+				httpmock.Activate()
+				discoveryResponse = httpmock.NewStringResponse(http.StatusOK, responseBody)
+				flags = []string{fmt.Sprintf("--jwt-issuer=%s", issuer)}
+
+				httpmock.RegisterResponder("GET", issuer+oidcWellKnown, func(request *http.Request) (*http.Response, error) {
+					return discoveryResponse, nil
+				})
+			})
+
+			JustBeforeEach(func() {
+				config, actualError = Build("collector-build", flags)
+			})
+
+			AfterEach(func() {
+				httpmock.Deactivate()
+			})
+
+			When("the issuer flag is passed", func() {
+				It("should be set in the config", func() {
+					Expect(actualError).ToNot(HaveOccurred())
+					Expect(config.Auth.JWT.Issuer).To(Equal(issuer))
+				})
+			})
+
+			When("the issuer and required audience flag are passed", func() {
+				var (
+					expectedAudience string
+				)
+
+				BeforeEach(func() {
+					expectedAudience = fake.LetterN(10)
+					flags = []string{fmt.Sprintf("--jwt-issuer=%s", issuer), fmt.Sprintf("--jwt-required-audience=%s", expectedAudience)}
+				})
+
+				It("should set both in the configuration", func() {
+					Expect(actualError).ToNot(HaveOccurred())
+					Expect(config.Auth.JWT.Issuer).To(Equal(issuer))
+					Expect(config.Auth.JWT.RequiredAudience).To(Equal(expectedAudience))
+				})
+			})
+
+			When("an error occurs retrieving the discovery document", func() {
+				BeforeEach(func() {
+					discoveryResponse = httpmock.NewStringResponse(http.StatusInternalServerError, "error")
+				})
+
+				It("should return the error", func() {
+					Expect(actualError).To(HaveOccurred())
+				})
+			})
+		})
 	})
 })

@@ -17,9 +17,12 @@ package config
 import (
 	"testing"
 
+	"github.com/brianvoe/gofakeit/v6"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
+
+var fake = gofakeit.New(0)
 
 func TestConfig(t *testing.T) {
 	RegisterFailHandler(Fail)
