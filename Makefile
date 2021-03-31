@@ -31,4 +31,4 @@ test: fmtcheck vet
 	go test -v ./... -coverprofile=coverage.txt -covermode atomic
 
 run:
-	go run main.go --rode-host=localhost:50051 --rode-insecure --debug
+	go run main.go --rode-host=localhost:50053 --rode-insecure --debug
