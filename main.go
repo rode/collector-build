@@ -26,9 +26,11 @@ import (
 	"syscall"
 	"time"
 
+	grpc_auth "github.com/grpc-ecosystem/go-grpc-middleware/auth"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/rode/collector-build/proto/v1alpha1"
 	"github.com/rode/collector-build/server"
+	"github.com/rode/rode/auth"
 	pb "github.com/rode/rode/proto/v1alpha1"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
@@ -74,7 +76,15 @@ func main() {
 	defer conn.Close()
 
 	rodeClient := pb.NewRodeClient(conn)
-	grpcServer := grpc.NewServer()
+	authenticator := auth.NewAuthenticator(conf.Auth)
+	grpcServer := grpc.NewServer(
+		grpc.StreamInterceptor(
+			grpc_auth.StreamServerInterceptor(authenticator.Authenticate),
+		),
+		grpc.UnaryInterceptor(
+			grpc_auth.UnaryServerInterceptor(authenticator.Authenticate),
+		),
+	)
 
 	if conf.Debug {
 		reflection.Register(grpcServer)

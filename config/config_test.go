@@ -49,7 +49,8 @@ var _ = Describe("Config", func() {
 		},
 			Entry("default config", []string{}, &Config{
 				Auth: &rodeconfig.AuthConfig{
-					JWT: &rodeconfig.JWTAuthConfig{},
+					Basic: &rodeconfig.BasicAuthConfig{},
+					JWT:   &rodeconfig.JWTAuthConfig{},
 				},
 				GrpcPort: 8082,
 				HttpPort: 8083,
@@ -60,7 +61,8 @@ var _ = Describe("Config", func() {
 			}),
 			Entry("Rode host flag", []string{"--rode-host=bar"}, &Config{
 				Auth: &rodeconfig.AuthConfig{
-					JWT: &rodeconfig.JWTAuthConfig{},
+					Basic: &rodeconfig.BasicAuthConfig{},
+					JWT:   &rodeconfig.JWTAuthConfig{},
 				},
 				GrpcPort: 8082,
 				HttpPort: 8083,
@@ -71,7 +73,8 @@ var _ = Describe("Config", func() {
 			}),
 			Entry("Rode insecure flag", []string{"--rode-insecure=true"}, &Config{
 				Auth: &rodeconfig.AuthConfig{
-					JWT: &rodeconfig.JWTAuthConfig{},
+					Basic: &rodeconfig.BasicAuthConfig{},
+					JWT:   &rodeconfig.JWTAuthConfig{},
 				},
 				GrpcPort: 8082,
 				HttpPort: 8083,

@@ -42,7 +42,8 @@ func Build(name string, args []string) (*Config, error) {
 
 	c := &Config{
 		Auth: &rodeconfig.AuthConfig{
-			JWT: &rodeconfig.JWTAuthConfig{},
+			Basic: &rodeconfig.BasicAuthConfig{},
+			JWT:   &rodeconfig.JWTAuthConfig{},
 		},
 		RodeConfig: &RodeConfig{},
 	}
