@@ -22,7 +22,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/golang/protobuf/ptypes"
 	"github.com/golang/protobuf/ptypes/timestamp"
 	"github.com/rode/collector-build/proto/v1alpha1"
 	pb "github.com/rode/rode/proto/v1alpha1"
@@ -35,6 +34,7 @@ import (
 	"google.golang.org/genproto/protobuf/field_mask"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 const (
@@ -215,7 +215,7 @@ func mapRequestToBuildOccurrence(log *zap.Logger, request *v1alpha1.CreateBuildR
 					ProjectId:      rodeProjectId,
 					BuiltArtifacts: artifacts,
 					Creator:        request.Creator,
-					CreateTime:     ptypes.TimestampNow(),
+					CreateTime:     timestamppb.Now(),
 					StartTime:      startTime,
 					EndTime:        endTime,
 					LogsUri:        request.LogsUri,
@@ -242,7 +242,7 @@ func extractOccurrenceIdFromName(occurrenceName string) string {
 
 func getValidTimestamp(t *timestamp.Timestamp) *timestamp.Timestamp {
 	if !t.IsValid() {
-		return ptypes.TimestampNow()
+		return timestamppb.Now()
 	}
 
 	return t
