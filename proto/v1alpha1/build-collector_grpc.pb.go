@@ -11,6 +11,7 @@ import (
 
 // This is a compile-time assertion to ensure that this generated file
 // is compatible with the grpc package it is being compiled against.
+// Requires gRPC-Go v1.32.0 or later.
 const _ = grpc.SupportPackageIsVersion7
 
 // BuildCollectorClient is the client API for BuildCollector service.
@@ -74,7 +75,7 @@ type UnsafeBuildCollectorServer interface {
 }
 
 func RegisterBuildCollectorServer(s grpc.ServiceRegistrar, srv BuildCollectorServer) {
-	s.RegisterService(&_BuildCollector_serviceDesc, srv)
+	s.RegisterService(&BuildCollector_ServiceDesc, srv)
 }
 
 func _BuildCollector_CreateBuild_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -113,7 +114,10 @@ func _BuildCollector_UpdateBuildArtifacts_Handler(srv interface{}, ctx context.C
 	return interceptor(ctx, in, info, handler)
 }
 
-var _BuildCollector_serviceDesc = grpc.ServiceDesc{
+// BuildCollector_ServiceDesc is the grpc.ServiceDesc for BuildCollector service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var BuildCollector_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "build_collector.v1alpha1.BuildCollector",
 	HandlerType: (*BuildCollectorServer)(nil),
 	Methods: []grpc.MethodDesc{

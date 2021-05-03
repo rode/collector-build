@@ -17,8 +17,7 @@ package config
 import "flag"
 
 type Config struct {
-	GrpcPort   int
-	HttpPort   int
+	Port       int
 	Debug      bool
 	RodeConfig *RodeConfig
 }
@@ -35,9 +34,8 @@ func Build(name string, args []string) (*Config, error) {
 		RodeConfig: &RodeConfig{},
 	}
 
-	flags.IntVar(&c.GrpcPort, "grpc-port", 8082, "the port that the build collector's gRPC service should listen on")
-	flags.IntVar(&c.HttpPort, "http-port", 8083, "the port that the build collector's gRPC gateway should listen on")
-	flags.BoolVar(&c.Debug, "debug", false, "when set, debug mode will be enabled")
+	flags.IntVar(&c.Port, "port", 8082, "the port that the build collector's gRPC/HTTP server should listen on")
+	flags.BoolVar(&c.Debug, "debug", false, "when set, debug mode w ill be enabled")
 
 	flags.StringVar(&c.RodeConfig.Host, "rode-host", "rode:50051", "the host to use to connect to rode")
 	flags.BoolVar(&c.RodeConfig.Insecure, "rode-insecure", false, "when set, the connection to rode will not use TLS")

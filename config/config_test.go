@@ -41,25 +41,22 @@ var _ = Describe("Config", func() {
 			Expect(c).To(Equal(expected))
 		},
 			Entry("default config", []string{}, &Config{
-				GrpcPort: 8082,
-				HttpPort: 8083,
-				Debug:    false,
+				Port:  8082,
+				Debug: false,
 				RodeConfig: &RodeConfig{
 					Host: "rode:50051",
 				},
 			}),
 			Entry("Rode host flag", []string{"--rode-host=bar"}, &Config{
-				GrpcPort: 8082,
-				HttpPort: 8083,
-				Debug:    false,
+				Port:  8082,
+				Debug: false,
 				RodeConfig: &RodeConfig{
 					Host: "bar",
 				},
 			}),
 			Entry("Rode insecure flag", []string{"--rode-insecure=true"}, &Config{
-				GrpcPort: 8082,
-				HttpPort: 8083,
-				Debug:    false,
+				Port:  8082,
+				Debug: false,
 				RodeConfig: &RodeConfig{
 					Host:     "rode:50051",
 					Insecure: true,

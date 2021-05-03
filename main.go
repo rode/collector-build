@@ -18,6 +18,8 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"github.com/soheilhy/cmux"
+	"golang.org/x/sync/errgroup"
 	"log"
 	"net"
 	"net/http"
@@ -50,7 +52,7 @@ func main() {
 		log.Fatalf("failed to create logger: %v", err)
 	}
 
-	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", conf.GrpcPort))
+	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", conf.Port))
 	if err != nil {
 		logger.Fatal("failed to listen", zap.Error(err))
 	}
@@ -68,7 +70,6 @@ func main() {
 	defer cancel()
 	conn, err := grpc.DialContext(ctx, conf.RodeConfig.Host, dialOptions...)
 	if err != nil {
-		logger.Info(fmt.Sprintf("conf %v", conf.RodeConfig))
 		logger.Fatal("failed to establish grpc connection to Rode", zap.Error(err))
 	}
 	defer conn.Close()
@@ -86,22 +87,32 @@ func main() {
 	healthzServer := server.NewHealthzServer(logger.Named("healthz"))
 	grpc_health_v1.RegisterHealthServer(grpcServer, healthzServer)
 
-	go func() {
-		if err := grpcServer.Serve(lis); err != nil {
-			logger.Fatal("failed to serve", zap.Error(err))
-		}
-	}()
+	mux := cmux.New(lis)
+	grpcListener := mux.Match(cmux.HTTP2())
+	httpListener := mux.Match(cmux.HTTP1())
 
-	httpServer, err := createGrpcGateway(context.Background(), lis.Addr().String(), fmt.Sprintf(":%d", conf.HttpPort))
+	grpcGateway, err := createGrpcGateway(context.Background(), lis.Addr().String())
 	if err != nil {
-		logger.Fatal("failed to start gateway", zap.Error(err))
+		logger.Fatal("failed to create gRPC gateway", zap.Error(err))
 	}
 
-	go func() {
-		if err := httpServer.ListenAndServe(); err != nil {
-			logger.Fatal("failed to start serve on http port", zap.Error(err))
-		}
-	}()
+	httpMux := http.NewServeMux()
+	httpMux.Handle("/", grpcGateway)
+
+	httpServer := &http.Server{
+		Handler: httpMux,
+	}
+
+	servers := new(errgroup.Group)
+	servers.Go(func() error {
+		return grpcServer.Serve(grpcListener)
+	})
+	servers.Go(func() error {
+		return httpServer.Serve(httpListener)
+	})
+	servers.Go(func() error {
+		return mux.Serve()
+	})
 
 	logger.Info("listening", zap.String("host", lis.Addr().String()))
 	healthzServer.Ready()
@@ -118,11 +129,10 @@ func main() {
 	httpServer.Shutdown(context.Background())
 }
 
-func createGrpcGateway(ctx context.Context, grpcAddress, httpPort string) (*http.Server, error) {
+func createGrpcGateway(ctx context.Context, grpcAddress string) (http.Handler, error) {
 	conn, err := grpc.DialContext(
 		context.Background(),
 		grpcAddress,
-		grpc.WithBlock(),
 		grpc.WithInsecure(),
 	)
 	if err != nil {
@@ -133,10 +143,7 @@ func createGrpcGateway(ctx context.Context, grpcAddress, httpPort string) (*http
 		return nil, err
 	}
 
-	return &http.Server{
-		Addr:    httpPort,
-		Handler: gwmux,
-	}, nil
+	return http.Handler(gwmux), nil
 }
 
 func createLogger(debug bool) (*zap.Logger, error) {
