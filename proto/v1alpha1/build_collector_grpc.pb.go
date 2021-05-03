@@ -131,5 +131,5 @@ var BuildCollector_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "proto/v1alpha1/build-collector.proto",
+	Metadata: "proto/v1alpha1/build_collector.proto",
 }
