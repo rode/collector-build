@@ -21,7 +21,6 @@ import (
 	"time"
 
 	"github.com/golang/mock/gomock"
-	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/rode/collector-build/mocks"
@@ -66,12 +65,17 @@ var _ = Describe("Server", func() {
 
 		BeforeEach(func() {
 			request = &v1alpha1.CreateBuildRequest{
-				Artifacts: []string{
-					fake.URL(),
-					fake.URL(),
+				Artifacts: []*v1alpha1.Artifact{
+					createRandomArtifact(),
+					createRandomArtifact(),
 				},
-				CommitId:   fake.LetterN(10),
-				Repository: fake.URL(),
+				CommitId:     fake.LetterN(10),
+				ProvenanceId: fake.Word(),
+				LogsUri:      fake.URL(),
+				Creator:      fake.Email(),
+				BuildStart:   timestamppb.Now(),
+				BuildEnd:     timestamppb.New(time.Now().Add(5 * time.Minute)),
+				Repository:   fake.URL(),
 			}
 		})
 
@@ -82,19 +86,12 @@ var _ = Describe("Server", func() {
 		Describe("successful build occurrence creation", func() {
 			var (
 				expectedOccurrenceId string
-				expectedProvenanceId string
 				actualRequest        *pb.BatchCreateOccurrencesRequest
 			)
 
 			BeforeEach(func() {
-				expectedOccurrenceId = fake.LetterN(10)
 				newOccurrence := &grafeas_go_proto.Occurrence{
 					Name: "projects/rode/occurrences/" + expectedOccurrenceId,
-				}
-
-				expectedProvenanceId = fake.UUID()
-				newUuid = func() uuid.UUID {
-					return uuid.MustParse(expectedProvenanceId)
 				}
 
 				request.Repository = "https://github.com/rode/collector-build"
@@ -130,8 +127,22 @@ var _ = Describe("Server", func() {
 				Expect(actualRequest.Occurrences[0].Kind).To(Equal(common_go_proto.NoteKind_BUILD))
 			})
 
-			It("should generate a new id for the provenance", func() {
-				Expect(actualRequest.Occurrences[0].GetBuild().Provenance.Id).To(Equal(expectedProvenanceId))
+			It("should set the provenance id", func() {
+				Expect(actualRequest.Occurrences[0].GetBuild().Provenance.Id).To(Equal(request.ProvenanceId))
+			})
+
+			It("should set the build creator", func() {
+				Expect(actualRequest.Occurrences[0].GetBuild().Provenance.Creator).To(Equal(request.Creator))
+			})
+
+			It("should set the provenance start, end, and create times", func() {
+				Expect(actualRequest.Occurrences[0].GetBuild().Provenance.StartTime).To(Equal(request.BuildStart))
+				Expect(actualRequest.Occurrences[0].GetBuild().Provenance.EndTime).To(Equal(request.BuildEnd))
+				Expect(actualRequest.Occurrences[0].GetBuild().Provenance.CreateTime.IsValid()).To(Equal(true))
+			})
+
+			It("should set the logsUri in the build provenance", func() {
+				Expect(actualRequest.Occurrences[0].GetBuild().Provenance.LogsUri).To(Equal(request.LogsUri))
 			})
 
 			It("should use the Rode project", func() {
@@ -145,8 +156,43 @@ var _ = Describe("Server", func() {
 				Expect(source.RevisionId).To(Equal(request.CommitId))
 			})
 
+			It("should include the specified artifacts", func() {
+				var expectedArtifacts []*provenance_go_proto.Artifact
+				for _, a := range request.Artifacts {
+					expectedArtifacts = append(expectedArtifacts, &provenance_go_proto.Artifact{
+						Id:    a.Id,
+						Names: a.Names,
+					})
+				}
+				actualArtifacts := actualRequest.Occurrences[0].GetBuild().Provenance.BuiltArtifacts
+
+				Expect(actualArtifacts).To(ConsistOf(expectedArtifacts))
+			})
+
 			It("should return the occurrence id", func() {
 				Expect(response.BuildOccurrenceId).To(Equal(expectedOccurrenceId))
+			})
+
+			Describe("build start is not specified", func() {
+				BeforeEach(func() {
+					request.BuildStart = nil
+				})
+
+				It("should use the current time", func() {
+					actualStartTime := actualRequest.Occurrences[0].GetBuild().Provenance.StartTime
+					Expect(actualStartTime.IsValid()).To(BeTrue())
+				})
+			})
+
+			Describe("build end is not specified", func() {
+				BeforeEach(func() {
+					request.BuildEnd = nil
+				})
+
+				It("should use the current time", func() {
+					actualEndTime := actualRequest.Occurrences[0].GetBuild().Provenance.EndTime
+					Expect(actualEndTime.IsValid()).To(BeTrue())
+				})
 			})
 		})
 
@@ -189,7 +235,7 @@ var _ = Describe("Server", func() {
 
 			When("the request contains no artifacts", func() {
 				BeforeEach(func() {
-					request.Artifacts = []string{}
+					request.Artifacts = []*v1alpha1.Artifact{}
 				})
 
 				It("should return an error", func() {
@@ -286,11 +332,11 @@ var _ = Describe("Server", func() {
 		BeforeEach(func() {
 			expectedOccurrenceId = fake.UUID()
 			request = &v1alpha1.UpdateBuildArtifactsRequest{
-				ExistingArtifact: fake.URL(),
-				NewArtifact:      fake.URL(),
+				ExistingArtifactId: fake.URL(),
+				NewArtifact:        createRandomArtifact(),
 			}
 
-			expectedOccurrence = makeBuildOccurrence(expectedOccurrenceId, request.ExistingArtifact)
+			expectedOccurrence = makeBuildOccurrence(expectedOccurrenceId, request.ExistingArtifactId)
 
 			listOccurrencesResponse = &pb.ListOccurrencesResponse{
 				Occurrences: []*grafeas_go_proto.Occurrence{expectedOccurrence},
@@ -324,7 +370,7 @@ var _ = Describe("Server", func() {
 
 			When("there's a single matching occurrence to update", func() {
 				It("should filter all occurrences using the existing artifact", func() {
-					expectedFilter := fmt.Sprintf(`build.provenance.builtArtifacts.nestedFilter(id == "%s")`, request.ExistingArtifact)
+					expectedFilter := fmt.Sprintf(`build.provenance.builtArtifacts.nestedFilter(id == "%s")`, request.ExistingArtifactId)
 
 					Expect(actualListOccurrencesRequest.Filter).To(Equal(expectedFilter))
 				})
@@ -334,10 +380,11 @@ var _ = Describe("Server", func() {
 
 					Expect(actualArtifacts).To(ConsistOf(
 						&provenance_go_proto.Artifact{
-							Id: request.ExistingArtifact,
+							Id: request.ExistingArtifactId,
 						},
 						&provenance_go_proto.Artifact{
-							Id: request.NewArtifact,
+							Id:    request.NewArtifact.Id,
+							Names: request.NewArtifact.Names,
 						},
 					))
 				})
@@ -362,10 +409,10 @@ var _ = Describe("Server", func() {
 				BeforeEach(func() {
 					createTime := time.Now()
 
-					oldestBuildOccurrence = makeBuildOccurrence(expectedOccurrenceId, request.ExistingArtifact)
+					oldestBuildOccurrence = makeBuildOccurrence(expectedOccurrenceId, request.ExistingArtifactId)
 					oldestBuildOccurrence.CreateTime = timestamppb.New(createTime)
 
-					newestBuildOccurrence = makeBuildOccurrence(fake.UUID(), request.ExistingArtifact)
+					newestBuildOccurrence = makeBuildOccurrence(fake.UUID(), request.ExistingArtifactId)
 					newestBuildOccurrence.CreateTime = timestamppb.New(createTime.Add(time.Minute * 5))
 
 					listOccurrencesResponse.Occurrences = []*grafeas_go_proto.Occurrence{
@@ -392,7 +439,7 @@ var _ = Describe("Server", func() {
 			Describe("request validation", func() {
 				When("request is missing the existing artifact slug", func() {
 					BeforeEach(func() {
-						request.ExistingArtifact = ""
+						request.ExistingArtifactId = ""
 					})
 
 					It("should return an error", func() {
@@ -410,7 +457,7 @@ var _ = Describe("Server", func() {
 
 				When("request is missing the new artifact slug", func() {
 					BeforeEach(func() {
-						request.NewArtifact = ""
+						request.NewArtifact = nil
 					})
 
 					It("should return an error", func() {
@@ -504,6 +551,16 @@ func makeBuildOccurrence(occurrenceId, artifact string) *grafeas_go_proto.Occurr
 					},
 				},
 			},
+		},
+	}
+}
+
+func createRandomArtifact() *v1alpha1.Artifact {
+	return &v1alpha1.Artifact{
+		Id: fake.URL(),
+		Names: []string{
+			fake.URL(),
+			fake.URL(),
 		},
 	}
 }
