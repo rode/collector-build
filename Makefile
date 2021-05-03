@@ -19,7 +19,8 @@ license:
 	addlicense -c 'The Rode Authors' $(LICENSE_FILES)
 
 mocks:
-	mockgen -package mocks github.com/rode/rode/proto/v1alpha1 RodeClient > mocks/rode_client.go
+	go install github.com/maxbrunsfeld/counterfeiter/v6@v6.4.1
+	COUNTERFEITER_NO_GENERATE_WARNING="true" go generate ./...
 
 vet:
 	go vet ./...

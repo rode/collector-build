@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/golang/mock/gomock"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/rode/collector-build/mocks"
@@ -39,21 +38,15 @@ import (
 var _ = Describe("Server", func() {
 	var (
 		ctx        context.Context
-		mockCtrl   *gomock.Controller
-		rodeClient *mocks.MockRodeClient
+		rodeClient *mocks.FakeRodeClient
 		server     *BuildCollectorServer
 	)
 
 	BeforeEach(func() {
 		ctx = context.Background()
-		mockCtrl = gomock.NewController(GinkgoT())
-		rodeClient = mocks.NewMockRodeClient(mockCtrl)
+		rodeClient = &mocks.FakeRodeClient{}
 
 		server = NewBuildCollectorServer(zap.NewNop(), rodeClient)
-	})
-
-	AfterEach(func() {
-		mockCtrl.Finish()
 	})
 
 	Describe("CreateBuild", func() {
@@ -86,7 +79,6 @@ var _ = Describe("Server", func() {
 		Describe("successful build occurrence creation", func() {
 			var (
 				expectedOccurrenceId string
-				actualRequest        *pb.BatchCreateOccurrencesRequest
 			)
 
 			BeforeEach(func() {
@@ -96,60 +88,74 @@ var _ = Describe("Server", func() {
 
 				request.Repository = "https://github.com/rode/collector-build"
 
-				rodeClient.EXPECT().
-					BatchCreateOccurrences(ctx, gomock.Any()).
-					Do(func(_ context.Context, r *pb.BatchCreateOccurrencesRequest) {
-						actualRequest = r
-					}).
-					Return(&pb.BatchCreateOccurrencesResponse{Occurrences: []*grafeas_go_proto.Occurrence{newOccurrence}}, nil).
-					Times(1)
+				batchResponse := &pb.BatchCreateOccurrencesResponse{Occurrences: []*grafeas_go_proto.Occurrence{newOccurrence}}
+				rodeClient.BatchCreateOccurrencesReturns(batchResponse, nil)
 			})
 
 			It("should not return an error", func() {
 				Expect(actualError).NotTo(HaveOccurred())
 			})
 
+			It("should call BatchCreateOccurrences a single time", func() {
+				Expect(rodeClient.BatchCreateOccurrencesCallCount()).To(Equal(1))
+			})
+
 			It("should send a single occurrence", func() {
+				_, actualRequest, _ := rodeClient.BatchCreateOccurrencesArgsForCall(0)
+
 				Expect(actualRequest.Occurrences).To(HaveLen(1))
 			})
 
 			It("should set the resource uri using the repository and commit id", func() {
+				_, actualRequest, _ := rodeClient.BatchCreateOccurrencesArgsForCall(0)
 				expectedResourceUri := "git://github.com/rode/collector-build@" + request.CommitId
 
 				Expect(actualRequest.Occurrences[0].Resource.Uri).To(Equal(expectedResourceUri))
 			})
 
 			It("should set a static note name", func() {
+				_, actualRequest, _ := rodeClient.BatchCreateOccurrencesArgsForCall(0)
 				Expect(actualRequest.Occurrences[0].NoteName).To(Equal("projects/rode/notes/build_collector"))
 			})
 
 			It("should set the kind as BUILD", func() {
+				_, actualRequest, _ := rodeClient.BatchCreateOccurrencesArgsForCall(0)
 				Expect(actualRequest.Occurrences[0].Kind).To(Equal(common_go_proto.NoteKind_BUILD))
 			})
 
 			It("should set the provenance id", func() {
+				_, actualRequest, _ := rodeClient.BatchCreateOccurrencesArgsForCall(0)
 				Expect(actualRequest.Occurrences[0].GetBuild().Provenance.Id).To(Equal(request.ProvenanceId))
 			})
 
 			It("should set the build creator", func() {
+				_, actualRequest, _ := rodeClient.BatchCreateOccurrencesArgsForCall(0)
 				Expect(actualRequest.Occurrences[0].GetBuild().Provenance.Creator).To(Equal(request.Creator))
 			})
 
 			It("should set the provenance start, end, and create times", func() {
-				Expect(actualRequest.Occurrences[0].GetBuild().Provenance.StartTime).To(Equal(request.BuildStart))
-				Expect(actualRequest.Occurrences[0].GetBuild().Provenance.EndTime).To(Equal(request.BuildEnd))
-				Expect(actualRequest.Occurrences[0].GetBuild().Provenance.CreateTime.IsValid()).To(Equal(true))
+				_, actualRequest, _ := rodeClient.BatchCreateOccurrencesArgsForCall(0)
+				buildProvenance := actualRequest.Occurrences[0].GetBuild().Provenance
+
+				Expect(buildProvenance.StartTime).To(Equal(request.BuildStart))
+				Expect(buildProvenance.EndTime).To(Equal(request.BuildEnd))
+				Expect(buildProvenance.CreateTime.IsValid()).To(Equal(true))
 			})
 
 			It("should set the logsUri in the build provenance", func() {
+				_, actualRequest, _ := rodeClient.BatchCreateOccurrencesArgsForCall(0)
+
 				Expect(actualRequest.Occurrences[0].GetBuild().Provenance.LogsUri).To(Equal(request.LogsUri))
 			})
 
 			It("should use the Rode project", func() {
+				_, actualRequest, _ := rodeClient.BatchCreateOccurrencesArgsForCall(0)
+
 				Expect(actualRequest.Occurrences[0].GetBuild().Provenance.ProjectId).To(Equal("projects/rode"))
 			})
 
 			It("should set the source context", func() {
+				_, actualRequest, _ := rodeClient.BatchCreateOccurrencesArgsForCall(0)
 				source := actualRequest.Occurrences[0].GetBuild().Provenance.SourceProvenance.Context.GetGit()
 
 				Expect(source.Url).To(Equal(request.Repository))
@@ -164,6 +170,7 @@ var _ = Describe("Server", func() {
 						Names: a.Names,
 					})
 				}
+				_, actualRequest, _ := rodeClient.BatchCreateOccurrencesArgsForCall(0)
 				actualArtifacts := actualRequest.Occurrences[0].GetBuild().Provenance.BuiltArtifacts
 
 				Expect(actualArtifacts).To(ConsistOf(expectedArtifacts))
@@ -179,6 +186,7 @@ var _ = Describe("Server", func() {
 				})
 
 				It("should use the current time", func() {
+					_, actualRequest, _ := rodeClient.BatchCreateOccurrencesArgsForCall(0)
 					actualStartTime := actualRequest.Occurrences[0].GetBuild().Provenance.StartTime
 					Expect(actualStartTime.IsValid()).To(BeTrue())
 				})
@@ -190,6 +198,7 @@ var _ = Describe("Server", func() {
 				})
 
 				It("should use the current time", func() {
+					_, actualRequest, _ := rodeClient.BatchCreateOccurrencesArgsForCall(0)
 					actualEndTime := actualRequest.Occurrences[0].GetBuild().Provenance.EndTime
 					Expect(actualEndTime.IsValid()).To(BeTrue())
 				})
@@ -277,10 +286,7 @@ var _ = Describe("Server", func() {
 
 			BeforeEach(func() {
 				expectedError = fmt.Errorf(fake.Word())
-				rodeClient.EXPECT().
-					BatchCreateOccurrences(gomock.Any(), gomock.Any()).
-					Return(nil, expectedError).
-					Times(1)
+				rodeClient.BatchCreateOccurrencesReturns(nil, expectedError)
 			})
 
 			It("should return an error", func() {
@@ -298,10 +304,7 @@ var _ = Describe("Server", func() {
 
 		Describe("BatchCreateOccurrences does not return expected occurrence", func() {
 			BeforeEach(func() {
-				rodeClient.EXPECT().
-					BatchCreateOccurrences(gomock.Any(), gomock.Any()).
-					Return(&pb.BatchCreateOccurrencesResponse{}, nil).
-					Times(1)
+				rodeClient.BatchCreateOccurrencesReturns(&pb.BatchCreateOccurrencesResponse{}, nil)
 			})
 
 			It("should return an error", func() {
@@ -348,34 +351,30 @@ var _ = Describe("Server", func() {
 		})
 
 		Describe("successful occurrence update", func() {
-			var (
-				actualListOccurrencesRequest  *pb.ListOccurrencesRequest
-				actualUpdateOccurrenceRequest *pb.UpdateOccurrenceRequest
-			)
-
 			BeforeEach(func() {
-				rodeClient.EXPECT().
-					UpdateOccurrence(ctx, gomock.Any()).
-					Do(func(_ context.Context, req *pb.UpdateOccurrenceRequest) {
-						actualUpdateOccurrenceRequest = req
-					}).Return(expectedOccurrence, nil)
+				rodeClient.UpdateOccurrenceReturns(expectedOccurrence, nil)
+				rodeClient.ListOccurrencesReturns(listOccurrencesResponse, nil)
+			})
 
-				rodeClient.EXPECT().
-					ListOccurrences(ctx, gomock.Any()).
-					Do(func(_ context.Context, req *pb.ListOccurrencesRequest) {
-						actualListOccurrencesRequest = req
-					}).
-					Return(listOccurrencesResponse, nil)
+			It("should call ListOccurrences once", func() {
+				Expect(rodeClient.ListOccurrencesCallCount()).To(Equal(1))
+			})
+
+			It("should call UpdateOccurrence once", func() {
+				Expect(rodeClient.UpdateOccurrenceCallCount()).To(Equal(1))
 			})
 
 			When("there's a single matching occurrence to update", func() {
 				It("should filter all occurrences using the existing artifact", func() {
+					_, actualListOccurrencesRequest, _ := rodeClient.ListOccurrencesArgsForCall(0)
+
 					expectedFilter := fmt.Sprintf(`build.provenance.builtArtifacts.nestedFilter(id == "%s")`, request.ExistingArtifactId)
 
 					Expect(actualListOccurrencesRequest.Filter).To(Equal(expectedFilter))
 				})
 
 				It("should append the new artifact", func() {
+					_, actualUpdateOccurrenceRequest, _ := rodeClient.UpdateOccurrenceArgsForCall(0)
 					actualArtifacts := actualUpdateOccurrenceRequest.Occurrence.GetBuild().Provenance.BuiltArtifacts
 
 					Expect(actualArtifacts).To(ConsistOf(
@@ -390,6 +389,7 @@ var _ = Describe("Server", func() {
 				})
 
 				It("should set the update mask to only change the artifacts", func() {
+					_, actualUpdateOccurrenceRequest, _ := rodeClient.UpdateOccurrenceArgsForCall(0)
 					actualMask := actualUpdateOccurrenceRequest.UpdateMask
 
 					Expect(actualMask.Paths).To(ConsistOf("details.build.provenance.built_artifacts"))
@@ -422,6 +422,7 @@ var _ = Describe("Server", func() {
 				})
 
 				It("should update the oldest build occurrence", func() {
+					_, actualUpdateOccurrenceRequest, _ := rodeClient.UpdateOccurrenceArgsForCall(0)
 					Expect(actualUpdateOccurrenceRequest.Id).To(Equal(expectedOccurrenceId))
 				})
 			})
@@ -476,7 +477,7 @@ var _ = Describe("Server", func() {
 
 			When("an error occurs listing occurrences", func() {
 				BeforeEach(func() {
-					rodeClient.EXPECT().ListOccurrences(gomock.Any(), gomock.Any()).Return(nil, expectedError)
+					rodeClient.ListOccurrencesReturns(nil, expectedError)
 				})
 
 				It("should return an error", func() {
@@ -494,8 +495,7 @@ var _ = Describe("Server", func() {
 			When("no occurrences have matching artifacts", func() {
 				BeforeEach(func() {
 					listOccurrencesResponse.Occurrences = []*grafeas_go_proto.Occurrence{}
-
-					rodeClient.EXPECT().ListOccurrences(gomock.Any(), gomock.Any()).Return(listOccurrencesResponse, nil)
+					rodeClient.ListOccurrencesReturns(listOccurrencesResponse, nil)
 				})
 
 				It("should return an error", func() {
@@ -512,8 +512,8 @@ var _ = Describe("Server", func() {
 
 			When("the call to UpdateOccurrence fails", func() {
 				BeforeEach(func() {
-					rodeClient.EXPECT().ListOccurrences(gomock.Any(), gomock.Any()).Return(listOccurrencesResponse, nil)
-					rodeClient.EXPECT().UpdateOccurrence(gomock.Any(), gomock.Any()).Return(nil, expectedError)
+					rodeClient.ListOccurrencesReturns(listOccurrencesResponse, nil)
+					rodeClient.UpdateOccurrenceReturns(nil, expectedError)
 				})
 
 				It("should return an error", func() {
