@@ -22,8 +22,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/golang/protobuf/ptypes"
-	"github.com/google/uuid"
+	"github.com/golang/protobuf/ptypes/timestamp"
 	"github.com/rode/collector-build/proto/v1alpha1"
 	pb "github.com/rode/rode/proto/v1alpha1"
 	"github.com/rode/rode/protodeps/grafeas/proto/v1beta1/build_go_proto"
@@ -35,16 +34,13 @@ import (
 	"google.golang.org/genproto/protobuf/field_mask"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 const (
 	rodeProjectId                 = "projects/rode"
 	buildCollectorNote            = rodeProjectId + "/notes/build_collector"
 	buildOccurrenceArtifactFilter = `build.provenance.builtArtifacts.nestedFilter(id == "%s")`
-)
-
-var (
-	newUuid = uuid.New
 )
 
 type BuildCollectorServer struct {
@@ -98,14 +94,14 @@ func (s *BuildCollectorServer) CreateBuild(ctx context.Context, request *v1alpha
 }
 
 func (s *BuildCollectorServer) UpdateBuildArtifacts(ctx context.Context, request *v1alpha1.UpdateBuildArtifactsRequest) (*v1alpha1.UpdateBuildArtifactsResponse, error) {
-	log := s.logger.Named("UpdateBuildArtifacts").With(zap.String("existingArtifact", request.ExistingArtifact), zap.String("newArtifact", request.NewArtifact))
+	log := s.logger.Named("UpdateBuildArtifacts").With(zap.String("existingArtifact", request.ExistingArtifactId), zap.Any("newArtifact", request.NewArtifact))
 	log.Debug("Received request")
 
 	if err := validateUpdateBuildArtifactsRequest(request); err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "Invalid request: %s", err)
 	}
 
-	artifactFilter := fmt.Sprintf(buildOccurrenceArtifactFilter, request.ExistingArtifact)
+	artifactFilter := fmt.Sprintf(buildOccurrenceArtifactFilter, request.ExistingArtifactId)
 
 	response, err := s.rode.ListOccurrences(ctx, &pb.ListOccurrencesRequest{Filter: artifactFilter})
 	if err != nil {
@@ -117,7 +113,7 @@ func (s *BuildCollectorServer) UpdateBuildArtifacts(ctx context.Context, request
 
 	if len(response.Occurrences) == 0 {
 		log.Error("No occurrence found for artifact")
-		return nil, status.Errorf(codes.NotFound, "No occurrence found for artifact: %s", request.ExistingArtifact)
+		return nil, status.Errorf(codes.NotFound, "No occurrence found for artifact: %s", request.ExistingArtifactId)
 	}
 
 	if len(response.Occurrences) > 1 {
@@ -135,7 +131,8 @@ func (s *BuildCollectorServer) UpdateBuildArtifacts(ctx context.Context, request
 	occurrence.GetBuild().Provenance.BuiltArtifacts = append(
 		occurrence.GetBuild().Provenance.BuiltArtifacts,
 		&provenance_go_proto.Artifact{
-			Id: request.NewArtifact,
+			Id:    request.NewArtifact.Id,
+			Names: request.NewArtifact.Names,
 		},
 	)
 
@@ -160,11 +157,11 @@ func (s *BuildCollectorServer) UpdateBuildArtifacts(ctx context.Context, request
 }
 
 func validateUpdateBuildArtifactsRequest(request *v1alpha1.UpdateBuildArtifactsRequest) error {
-	if len(request.NewArtifact) == 0 {
+	if request.NewArtifact == nil {
 		return errors.New("new artifact must be specified")
 	}
 
-	if len(request.ExistingArtifact) == 0 {
+	if len(request.ExistingArtifactId) == 0 {
 		return errors.New("existing artifact must be specified")
 	}
 
@@ -197,9 +194,13 @@ func mapRequestToBuildOccurrence(log *zap.Logger, request *v1alpha1.CreateBuildR
 	var artifacts []*provenance_go_proto.Artifact
 	for _, artifact := range request.Artifacts {
 		artifacts = append(artifacts, &provenance_go_proto.Artifact{
-			Id: artifact,
+			Id:    artifact.Id,
+			Names: artifact.Names,
 		})
 	}
+
+	startTime := getValidTimestamp(request.BuildStart)
+	endTime := getValidTimestamp(request.BuildEnd)
 
 	return &grafeas_go_proto.Occurrence{
 		Resource: &grafeas_go_proto.Resource{
@@ -210,10 +211,14 @@ func mapRequestToBuildOccurrence(log *zap.Logger, request *v1alpha1.CreateBuildR
 		Details: &grafeas_go_proto.Occurrence_Build{
 			Build: &build_go_proto.Details{
 				Provenance: &provenance_go_proto.BuildProvenance{
-					Id:             newUuid().String(),
+					Id:             request.ProvenanceId,
 					ProjectId:      rodeProjectId,
 					BuiltArtifacts: artifacts,
-					CreateTime:     ptypes.TimestampNow(),
+					Creator:        request.Creator,
+					CreateTime:     timestamppb.Now(),
+					StartTime:      startTime,
+					EndTime:        endTime,
+					LogsUri:        request.LogsUri,
 					SourceProvenance: &provenance_go_proto.Source{
 						Context: &source_go_proto.SourceContext{
 							Context: &source_go_proto.SourceContext_Git{
@@ -233,4 +238,12 @@ func extractOccurrenceIdFromName(occurrenceName string) string {
 	namePieces := strings.Split(occurrenceName, "/")
 
 	return namePieces[len(namePieces)-1]
+}
+
+func getValidTimestamp(t *timestamp.Timestamp) *timestamp.Timestamp {
+	if !t.IsValid() {
+		return timestamppb.Now()
+	}
+
+	return t
 }

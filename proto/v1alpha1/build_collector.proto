@@ -19,6 +19,7 @@ package build_collector.v1alpha1;
 option go_package = "github.com/rode/collector-build/proto/v1alpha1";
 
 import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
 
 service BuildCollector {
   rpc CreateBuild(CreateBuildRequest) returns (CreateBuildResponse) {
@@ -35,12 +36,28 @@ service BuildCollector {
   }
 }
 
+message Artifact {
+  string id = 1;
+  repeated string names = 2;
+}
+
 message CreateBuildRequest {
   // The Git repository holding the source code for the artifact(s)
   string repository = 1;
   // Any generated outputs of the build
-  repeated string artifacts = 2;
+  repeated Artifact artifacts = 2;
+  // Commit SHA
   string commit_id = 3;
+  // source of the build
+  string provenanceId = 4;
+  // link to the build logs
+  string logsUri = 5;
+  // build creator
+  string creator = 6;
+  // time the build began
+  google.protobuf.Timestamp build_start = 7;
+  // timestamp of when the build ended
+  google.protobuf.Timestamp build_end = 8;
 }
 
 message CreateBuildResponse {
@@ -49,8 +66,8 @@ message CreateBuildResponse {
 }
 
 message UpdateBuildArtifactsRequest {
-  string existing_artifact = 1;
-  string new_artifact = 2;
+  string existing_artifact_id = 1;
+  Artifact new_artifact = 2;
 }
 
 message UpdateBuildArtifactsResponse {
