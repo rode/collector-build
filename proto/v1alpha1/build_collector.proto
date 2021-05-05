@@ -49,15 +49,17 @@ message CreateBuildRequest {
   // Commit SHA
   string commit_id = 3;
   // source of the build
-  string provenanceId = 4;
+  string provenance_id = 4;
   // link to the build logs
-  string logsUri = 5;
+  string logs_uri = 5;
   // build creator
   string creator = 6;
   // time the build began
   google.protobuf.Timestamp build_start = 7;
   // timestamp of when the build ended
   google.protobuf.Timestamp build_end = 8;
+  // link to a diff of the changeset
+  string commit_uri = 9;
 }
 
 message CreateBuildResponse {
