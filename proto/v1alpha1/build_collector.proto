@@ -58,6 +58,8 @@ message CreateBuildRequest {
   google.protobuf.Timestamp build_start = 7;
   // timestamp of when the build ended
   google.protobuf.Timestamp build_end = 8;
+  // link to a diff of the changeset
+  string commit_uri = 9;
 }
 
 message CreateBuildResponse {
