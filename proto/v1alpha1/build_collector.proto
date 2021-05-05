@@ -49,9 +49,9 @@ message CreateBuildRequest {
   // Commit SHA
   string commit_id = 3;
   // source of the build
-  string provenanceId = 4;
+  string provenance_id = 4;
   // link to the build logs
-  string logsUri = 5;
+  string logs_uri = 5;
   // build creator
   string creator = 6;
   // time the build began
