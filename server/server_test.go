@@ -63,6 +63,7 @@ var _ = Describe("Server", func() {
 					createRandomArtifact(),
 				},
 				CommitId:     fake.LetterN(10),
+				CommitUri:    fake.URL(),
 				ProvenanceId: fake.Word(),
 				LogsUri:      fake.URL(),
 				Creator:      fake.Email(),
@@ -158,7 +159,7 @@ var _ = Describe("Server", func() {
 				_, actualRequest, _ := rodeClient.BatchCreateOccurrencesArgsForCall(0)
 				source := actualRequest.Occurrences[0].GetBuild().Provenance.SourceProvenance.Context.GetGit()
 
-				Expect(source.Url).To(Equal(request.Repository))
+				Expect(source.Url).To(Equal(request.CommitUri))
 				Expect(source.RevisionId).To(Equal(request.CommitId))
 			})
 

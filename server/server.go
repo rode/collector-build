@@ -223,7 +223,7 @@ func mapRequestToBuildOccurrence(log *zap.Logger, request *v1alpha1.CreateBuildR
 						Context: &source_go_proto.SourceContext{
 							Context: &source_go_proto.SourceContext_Git{
 								Git: &source_go_proto.GitSourceContext{
-									Url:        request.Repository,
+									Url:        request.CommitUri,
 									RevisionId: request.CommitId,
 								}},
 						},
