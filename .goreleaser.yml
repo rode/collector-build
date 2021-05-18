@@ -14,6 +14,7 @@ dockers:
       - "ghcr.io/rode/collector-build:latest"
       - "ghcr.io/rode/collector-build:{{ .Tag }}"
       - "ghcr.io/rode/collector-build:v{{ .Major }}"
+      - "ghcr.io/rode/collector-build:v{{ .Major }}.{{ .Minor }}"
     extra_files:
       - "go.mod"
       - "go.sum"
