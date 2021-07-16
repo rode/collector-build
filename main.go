@@ -78,7 +78,7 @@ func main() {
 
 	dialOptions := []grpc.DialOption{
 		grpc.WithBlock(),
-		grpc.WithPerRPCCredentials(&proxyAuth{requireTransportSecurity: !conf.RodeConfig.Insecure }),
+		grpc.WithPerRPCCredentials(&proxyAuth{requireTransportSecurity: !conf.RodeConfig.Insecure}),
 	}
 	if conf.RodeConfig.Insecure {
 		dialOptions = append(dialOptions, grpc.WithInsecure())
