@@ -5,6 +5,7 @@ go 1.16
 require (
 	github.com/brianvoe/gofakeit/v6 v6.0.0
 	github.com/golang/protobuf v1.5.2
+	github.com/grpc-ecosystem/go-grpc-middleware v1.2.2
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.3.0
 	github.com/onsi/ginkgo v1.14.2
 	github.com/onsi/gomega v1.11.0

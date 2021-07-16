@@ -18,8 +18,6 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"github.com/soheilhy/cmux"
-	"golang.org/x/sync/errgroup"
 	"log"
 	"net"
 	"net/http"
@@ -27,6 +25,11 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
+
+	"github.com/grpc-ecosystem/go-grpc-middleware/util/metautils"
+	"github.com/soheilhy/cmux"
+	"golang.org/x/sync/errgroup"
+	"google.golang.org/grpc/metadata"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/rode/collector-build/proto/v1alpha1"
@@ -59,6 +62,16 @@ func main() {
 
 	dialOptions := []grpc.DialOption{
 		grpc.WithBlock(),
+		grpc.WithUnaryInterceptor(func(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+			authzHeader := metautils.ExtractIncoming(ctx).Get("authorization")
+
+			if authzHeader != "" {
+				logger.Debug("Forwarding authorization header from incoming request")
+				ctx = metadata.AppendToOutgoingContext(ctx, "authorization", authzHeader)
+			}
+
+			return invoker(ctx, method, req, reply, cc, opts...)
+		}),
 	}
 	if conf.RodeConfig.Insecure {
 		dialOptions = append(dialOptions, grpc.WithInsecure())
