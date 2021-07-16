@@ -1,4 +1,4 @@
-.PHONY: test fmtcheck vet fmt coverage license mocks run
+.PHONY: test fmtcheck vet fmt coverage license run
 MAKEFLAGS += --silent
 GOFMT_FILES?=$$(find . -name '*.go' | grep -v proto)
 LICENSE_FILES=$$(find -E . -regex '.*\.(go|proto)')
@@ -17,10 +17,6 @@ fmt:
 
 license:
 	addlicense -c 'The Rode Authors' $(LICENSE_FILES)
-
-mocks:
-	go install github.com/maxbrunsfeld/counterfeiter/v6@v6.4.1
-	COUNTERFEITER_NO_GENERATE_WARNING="true" go generate ./...
 
 vet:
 	go vet ./...

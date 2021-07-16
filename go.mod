@@ -4,13 +4,12 @@ go 1.16
 
 require (
 	github.com/brianvoe/gofakeit/v6 v6.4.1
-	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/protobuf v1.5.2
 	github.com/grpc-ecosystem/go-grpc-middleware v1.2.2
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.3.0
 	github.com/onsi/ginkgo v1.16.2
 	github.com/onsi/gomega v1.12.0
-	github.com/peterbourgon/ff/v3 v3.1.0 // indirect
+	github.com/peterbourgon/ff/v3 v3.1.0
 	github.com/rode/rode v0.14.4
 	github.com/soheilhy/cmux v0.1.5
 	go.uber.org/zap v1.16.0
