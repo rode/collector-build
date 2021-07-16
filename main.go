@@ -57,7 +57,7 @@ func (p *proxyAuth) GetRequestMetadata(ctx context.Context, _ ...string) (map[st
 }
 
 func (p *proxyAuth) RequireTransportSecurity() bool {
-	return false
+	return p.requireTransportSecurity
 }
 
 func main() {
