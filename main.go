@@ -24,7 +24,6 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/grpc-ecosystem/go-grpc-middleware/util/metautils"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/rode/collector-build/proto/v1alpha1"
 	"github.com/rode/collector-build/server"
@@ -38,24 +37,6 @@ import (
 
 	"github.com/rode/collector-build/config"
 )
-
-type proxyAuth struct {
-	requireTransportSecurity bool
-}
-
-func (p *proxyAuth) GetRequestMetadata(ctx context.Context, _ ...string) (map[string]string, error) {
-	authzHeader := metautils.ExtractIncoming(ctx).Get("authorization")
-	metadata := map[string]string{}
-	if authzHeader != "" {
-		metadata["authorization"] = authzHeader
-	}
-
-	return metadata, nil
-}
-
-func (p *proxyAuth) RequireTransportSecurity() bool {
-	return p.requireTransportSecurity
-}
 
 func main() {
 	conf, err := config.Build(os.Args[0], os.Args[1:])
@@ -73,9 +54,8 @@ func main() {
 		logger.Fatal("failed to listen", zap.Error(err))
 	}
 
-	rodeClient, err := common.NewRodeClient(conf.ClientConfig, grpc.WithPerRPCCredentials(&proxyAuth{
-		requireTransportSecurity: !conf.ClientConfig.Rode.DisableTransportSecurity,
-	}))
+	proxyAuth := server.NewProxyAuth(!conf.ClientConfig.Rode.DisableTransportSecurity)
+	rodeClient, err := common.NewRodeClient(conf.ClientConfig, grpc.WithPerRPCCredentials(proxyAuth))
 	if err != nil {
 		logger.Fatal("could not create rode client", zap.Error(err))
 	}
