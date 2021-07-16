@@ -16,7 +16,6 @@ package main
 
 import (
 	"context"
-	"crypto/tls"
 	"fmt"
 	"log"
 	"net"
@@ -24,18 +23,16 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
 	"github.com/grpc-ecosystem/go-grpc-middleware/util/metautils"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/rode/collector-build/proto/v1alpha1"
 	"github.com/rode/collector-build/server"
-	pb "github.com/rode/rode/proto/v1alpha1"
+	"github.com/rode/rode/common"
 	"github.com/soheilhy/cmux"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/reflection"
 
@@ -76,26 +73,13 @@ func main() {
 		logger.Fatal("failed to listen", zap.Error(err))
 	}
 
-	dialOptions := []grpc.DialOption{
-		grpc.WithBlock(),
-		grpc.WithPerRPCCredentials(&proxyAuth{requireTransportSecurity: !conf.RodeConfig.Insecure}),
-	}
-	if conf.RodeConfig.Insecure {
-		dialOptions = append(dialOptions, grpc.WithInsecure())
-	} else {
-		dialOptions = append(dialOptions, grpc.WithTransportCredentials(credentials.NewTLS(&tls.Config{})))
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
-	defer cancel()
-
-	conn, err := grpc.DialContext(ctx, conf.RodeConfig.Host, dialOptions...)
+	rodeClient, err := common.NewRodeClient(conf.ClientConfig, grpc.WithPerRPCCredentials(&proxyAuth{
+		requireTransportSecurity: !conf.ClientConfig.Rode.DisableTransportSecurity,
+	}))
 	if err != nil {
-		logger.Fatal("failed to establish grpc connection to Rode", zap.Error(err))
+		logger.Fatal("could not create rode client", zap.Error(err))
 	}
-	defer conn.Close()
 
-	rodeClient := pb.NewRodeClient(conn)
 	grpcServer := grpc.NewServer()
 
 	if conf.Debug {
