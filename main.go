@@ -27,15 +27,13 @@ import (
 	"time"
 
 	"github.com/grpc-ecosystem/go-grpc-middleware/util/metautils"
-	"github.com/soheilhy/cmux"
-	"golang.org/x/sync/errgroup"
-	"google.golang.org/grpc/metadata"
-
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/rode/collector-build/proto/v1alpha1"
 	"github.com/rode/collector-build/server"
 	pb "github.com/rode/rode/proto/v1alpha1"
+	"github.com/soheilhy/cmux"
 	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/health/grpc_health_v1"
@@ -43,6 +41,24 @@ import (
 
 	"github.com/rode/collector-build/config"
 )
+
+type proxyAuth struct {
+	requireTransportSecurity bool
+}
+
+func (p *proxyAuth) GetRequestMetadata(ctx context.Context, _ ...string) (map[string]string, error) {
+	authzHeader := metautils.ExtractIncoming(ctx).Get("authorization")
+	metadata := map[string]string{}
+	if authzHeader != "" {
+		metadata["authorization"] = authzHeader
+	}
+
+	return metadata, nil
+}
+
+func (p *proxyAuth) RequireTransportSecurity() bool {
+	return false
+}
 
 func main() {
 	conf, err := config.Build(os.Args[0], os.Args[1:])
@@ -62,16 +78,7 @@ func main() {
 
 	dialOptions := []grpc.DialOption{
 		grpc.WithBlock(),
-		grpc.WithUnaryInterceptor(func(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
-			authzHeader := metautils.ExtractIncoming(ctx).Get("authorization")
-
-			if authzHeader != "" {
-				logger.Debug("Forwarding authorization header from incoming request")
-				ctx = metadata.AppendToOutgoingContext(ctx, "authorization", authzHeader)
-			}
-
-			return invoker(ctx, method, req, reply, cc, opts...)
-		}),
+		grpc.WithPerRPCCredentials(&proxyAuth{requireTransportSecurity: !conf.RodeConfig.Insecure }),
 	}
 	if conf.RodeConfig.Insecure {
 		dialOptions = append(dialOptions, grpc.WithInsecure())
@@ -81,6 +88,7 @@ func main() {
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancel()
+
 	conn, err := grpc.DialContext(ctx, conf.RodeConfig.Host, dialOptions...)
 	if err != nil {
 		logger.Fatal("failed to establish grpc connection to Rode", zap.Error(err))
