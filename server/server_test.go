@@ -281,11 +281,13 @@ var _ = Describe("Server", func() {
 
 		Describe("error occurs while creating occurrence", func() {
 			var (
-				expectedError error
+				expectedError      error
+				expectedStatusCode codes.Code
 			)
 
 			BeforeEach(func() {
-				expectedError = fmt.Errorf(fake.Word())
+				expectedStatusCode = randomGRPCStatusCode()
+				expectedError = status.Errorf(expectedStatusCode, fake.Word())
 				rodeClient.BatchCreateOccurrencesReturns(nil, expectedError)
 			})
 
@@ -294,10 +296,10 @@ var _ = Describe("Server", func() {
 				Expect(response).To(BeNil())
 			})
 
-			It("should set the status to internal server error", func() {
+			It("should return the status that was returned from rode", func() {
 				s := getGRPCStatusFromError(actualError)
 
-				Expect(s.Code()).To(Equal(codes.Internal))
+				Expect(s.Code()).To(Equal(expectedStatusCode))
 				Expect(s.Message()).To(Equal(fmt.Sprintf("Error creating occurrences in Rode: %s", expectedError)))
 			})
 		})
@@ -430,10 +432,12 @@ var _ = Describe("Server", func() {
 
 		Describe("updating the occurrence is unsuccessful", func() {
 			var (
-				expectedError error
+				expectedError      error
+				expectedStatusCode codes.Code
 			)
 
 			BeforeEach(func() {
+				expectedStatusCode = randomGRPCStatusCode()
 				expectedError = errors.New(fake.Word())
 			})
 
@@ -477,6 +481,7 @@ var _ = Describe("Server", func() {
 
 			When("an error occurs listing occurrences", func() {
 				BeforeEach(func() {
+					expectedError = status.Errorf(expectedStatusCode, fake.Word())
 					rodeClient.ListOccurrencesReturns(nil, expectedError)
 				})
 
@@ -484,10 +489,10 @@ var _ = Describe("Server", func() {
 					Expect(actualError).To(HaveOccurred())
 				})
 
-				It("should set the status to internal server error", func() {
+				It("should return the status that was returned from rode", func() {
 					s := getGRPCStatusFromError(actualError)
 
-					Expect(s.Code()).To(Equal(codes.Internal))
+					Expect(s.Code()).To(Equal(expectedStatusCode))
 					Expect(s.Message()).To(ContainSubstring(expectedError.Error()))
 				})
 			})
@@ -512,6 +517,7 @@ var _ = Describe("Server", func() {
 
 			When("the call to UpdateOccurrence fails", func() {
 				BeforeEach(func() {
+					expectedError = status.Errorf(expectedStatusCode, fake.Word())
 					rodeClient.ListOccurrencesReturns(listOccurrencesResponse, nil)
 					rodeClient.UpdateOccurrenceReturns(nil, expectedError)
 				})
@@ -520,16 +526,27 @@ var _ = Describe("Server", func() {
 					Expect(actualError).To(HaveOccurred())
 				})
 
-				It("should set the status to internal server error", func() {
+				It("should return the status that was returned from rode", func() {
 					s := getGRPCStatusFromError(actualError)
 
-					Expect(s.Code()).To(Equal(codes.Internal))
+					Expect(s.Code()).To(Equal(expectedStatusCode))
 					Expect(s.Message()).To(ContainSubstring("Error updating existing artifact in Rode"))
 				})
 			})
 		})
 	})
 })
+
+func randomGRPCStatusCode() codes.Code {
+	c := []codes.Code{
+		codes.Internal,
+		codes.InvalidArgument,
+		codes.PermissionDenied,
+		codes.DeadlineExceeded,
+	}
+
+	return c[fake.Number(0, len(c)-1)]
+}
 
 func getGRPCStatusFromError(err error) *status.Status {
 	s, ok := status.FromError(err)
