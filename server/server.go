@@ -78,7 +78,7 @@ func (s *BuildCollectorServer) CreateBuild(ctx context.Context, request *v1alpha
 	if err != nil {
 		log.Error("Error occurred when calling BatchCreateOccurrences", zap.Error(err))
 
-		return nil, status.Errorf(codes.Internal, "Error creating occurrences in Rode: %s", err)
+		return nil, status.Errorf(status.Code(err), "Error creating occurrences in Rode: %s", err)
 	}
 
 	if len(response.Occurrences) != 1 {
@@ -107,7 +107,7 @@ func (s *BuildCollectorServer) UpdateBuildArtifacts(ctx context.Context, request
 	if err != nil {
 		log.Error("Error occurred when calling ListOccurrences", zap.Error(err))
 
-		return nil, status.Errorf(codes.Internal, "Error finding existing artifact in Rode: %s", err)
+		return nil, status.Errorf(status.Code(err), "Error finding existing artifact in Rode: %s", err)
 	}
 	log.Debug("ListOccurrences response", zap.Any("response", response))
 
@@ -146,7 +146,7 @@ func (s *BuildCollectorServer) UpdateBuildArtifacts(ctx context.Context, request
 	if err != nil {
 		log.Error("Error calling UpdateOccurrence", zap.Error(err))
 
-		return nil, status.Errorf(codes.Internal, "Error updating existing artifact in Rode: %s", err)
+		return nil, status.Errorf(status.Code(err), "Error updating existing artifact in Rode: %s", err)
 	}
 
 	log.Debug("UpdateOccurrence response", zap.Any("response", res))
