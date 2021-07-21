@@ -54,8 +54,7 @@ func main() {
 		logger.Fatal("failed to listen", zap.Error(err))
 	}
 
-	proxyAuth := server.NewProxyAuth(!conf.ClientConfig.Rode.DisableTransportSecurity)
-	rodeClient, err := common.NewRodeClient(conf.ClientConfig, grpc.WithPerRPCCredentials(proxyAuth))
+	rodeClient, err := common.NewRodeClient(conf.ClientConfig)
 	if err != nil {
 		logger.Fatal("could not create rode client", zap.Error(err))
 	}
