@@ -111,7 +111,7 @@ func RegisterBuildCollectorHandlerServer(ctx context.Context, mux *runtime.Serve
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/build_collector.v1alpha1.BuildCollector/CreateBuild")
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/build_collector.v1alpha1.BuildCollector/CreateBuild", runtime.WithHTTPPathPattern("/v1alpha1/builds"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -134,7 +134,7 @@ func RegisterBuildCollectorHandlerServer(ctx context.Context, mux *runtime.Serve
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/build_collector.v1alpha1.BuildCollector/UpdateBuildArtifacts")
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/build_collector.v1alpha1.BuildCollector/UpdateBuildArtifacts", runtime.WithHTTPPathPattern("/v1alpha1/builds"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -196,7 +196,7 @@ func RegisterBuildCollectorHandlerClient(ctx context.Context, mux *runtime.Serve
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/build_collector.v1alpha1.BuildCollector/CreateBuild")
+		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/build_collector.v1alpha1.BuildCollector/CreateBuild", runtime.WithHTTPPathPattern("/v1alpha1/builds"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -216,7 +216,7 @@ func RegisterBuildCollectorHandlerClient(ctx context.Context, mux *runtime.Serve
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/build_collector.v1alpha1.BuildCollector/UpdateBuildArtifacts")
+		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/build_collector.v1alpha1.BuildCollector/UpdateBuildArtifacts", runtime.WithHTTPPathPattern("/v1alpha1/builds"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
